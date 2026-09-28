@@ -1,0 +1,36 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      # SQLite in a named volume by default. For PostgreSQL:
+      #   docker compose --profile postgres up --build
+      # and set DATABASE_URL=postgresql+psycopg://gpucalc:gpucalc@postgres:5432/gpucalc
+      DATABASE_URL: ${DATABASE_URL:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+    volumes:
+      - gpucalc-data:/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${GPUCALC_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_USER: gpucalc
+      POSTGRES_PASSWORD: gpucalc
+      POSTGRES_DB: gpucalc
+    volumes:
+      - gpucalc-pg:/var/lib/postgresql/data
+
+volumes:
+  gpucalc-data:
+  gpucalc-pg:

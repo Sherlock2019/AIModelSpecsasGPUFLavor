@@ -1,0 +1,456 @@
+# GPU catalog (NVIDIA + AMD). Throughput figures are dense (non-sparse) peaks from the vendors'
+# official datasheets. Unknown values are null - never estimated. `usable_vram_mib` is the
+# framebuffer reported by nvidia-smi / rocm-smi where known; otherwise nominal vram_gb (decimal).
+# cost_per_hour is intentionally null: set your own prices in the GPU Catalog admin page.
+# interconnect_type: PCIe | NVLink | NVLink bridge | Infinity Fabric | ... (high-speed GPU link).
+
+gpus:
+  # ------------------------------------------------------------------ NVIDIA
+  - id: nvidia-t4
+    vendor: NVIDIA
+    model: T4
+    architecture_generation: Turing
+    form_factor: PCIe
+    vram_gb: 16
+    usable_vram_mib: 15360
+    memory_bandwidth_gbps: 320
+    fp16_tflops: 65
+    bf16_tflops: null
+    fp8_tflops: null
+    int8_tops: 130
+    int4_tops: 260
+    supports_vgpu: true
+    supports_mig: false
+    supports_nvlink: false
+    interconnect_type: PCIe
+    power_watts: 70
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: t4
+    metadata_source: https://www.nvidia.com/en-us/data-center/tesla-t4/
+    metadata_status: imported
+    notes: No BF16 support; BF16 models are served in FP16.
+
+  - id: nvidia-a10
+    vendor: NVIDIA
+    model: A10
+    architecture_generation: Ampere
+    form_factor: PCIe
+    vram_gb: 24
+    usable_vram_mib: 23028
+    memory_bandwidth_gbps: 600
+    fp16_tflops: 125
+    bf16_tflops: 125
+    fp8_tflops: null
+    int8_tops: 250
+    int4_tops: 500
+    supports_vgpu: true
+    supports_mig: false
+    supports_nvlink: false
+    interconnect_type: PCIe
+    power_watts: 150
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: a10
+    metadata_source: https://www.nvidia.com/en-us/data-center/products/a10-gpu/
+    metadata_status: imported
+
+  - id: nvidia-l4
+    vendor: NVIDIA
+    model: L4
+    architecture_generation: Ada Lovelace
+    form_factor: PCIe
+    vram_gb: 24
+    usable_vram_mib: 23034
+    memory_bandwidth_gbps: 300
+    fp16_tflops: 121
+    bf16_tflops: 121
+    fp8_tflops: 242.5
+    int8_tops: 242.5
+    int4_tops: null
+    supports_vgpu: true
+    supports_mig: false
+    supports_nvlink: false
+    interconnect_type: PCIe
+    power_watts: 72
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: l4
+    metadata_source: https://www.nvidia.com/en-us/data-center/l4/
+    metadata_status: imported
+
+  - id: nvidia-l40s
+    vendor: NVIDIA
+    model: L40S
+    architecture_generation: Ada Lovelace
+    form_factor: PCIe
+    vram_gb: 48
+    usable_vram_mib: 46068
+    memory_bandwidth_gbps: 864
+    fp16_tflops: 362
+    bf16_tflops: 362
+    fp8_tflops: 733
+    int8_tops: 733
+    int4_tops: null
+    supports_vgpu: true
+    supports_mig: false
+    supports_nvlink: false
+    interconnect_type: PCIe
+    power_watts: 350
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: l40s
+    metadata_source: https://www.nvidia.com/en-us/data-center/l40s/
+    metadata_status: imported
+    notes: No NVLink - multi-GPU model splits run over PCIe.
+
+  - id: nvidia-rtx-pro-6000-blackwell-server
+    vendor: NVIDIA
+    model: RTX PRO 6000 Blackwell Server Edition
+    architecture_generation: Blackwell
+    form_factor: PCIe
+    vram_gb: 96
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 1792
+    fp16_tflops: null
+    bf16_tflops: null
+    fp8_tflops: null
+    int8_tops: null
+    int4_tops: null
+    supports_vgpu: true
+    supports_mig: true
+    supports_nvlink: false
+    interconnect_type: PCIe
+    power_watts: 600
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: rtxpro6000
+    metadata_source: https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/
+    metadata_status: imported
+    notes: Tensor throughput not yet imported; compute adequacy is reported as unknown.
+
+  - id: nvidia-a100-40gb
+    vendor: NVIDIA
+    model: A100 40GB
+    architecture_generation: Ampere
+    form_factor: SXM4
+    vram_gb: 40
+    usable_vram_mib: 40960
+    memory_bandwidth_gbps: 1555
+    fp16_tflops: 312
+    bf16_tflops: 312
+    fp8_tflops: null
+    int8_tops: 624
+    int4_tops: 1248
+    supports_vgpu: true
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink
+    power_watts: 400
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: a100-40g
+    metadata_source: https://www.nvidia.com/en-us/data-center/a100/
+    metadata_status: imported
+
+  - id: nvidia-a100-80gb
+    vendor: NVIDIA
+    model: A100 80GB
+    architecture_generation: Ampere
+    form_factor: SXM4
+    vram_gb: 80
+    usable_vram_mib: 81920
+    memory_bandwidth_gbps: 2039
+    fp16_tflops: 312
+    bf16_tflops: 312
+    fp8_tflops: null
+    int8_tops: 624
+    int4_tops: 1248
+    supports_vgpu: true
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink
+    power_watts: 400
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: a100-80g
+    metadata_source: https://www.nvidia.com/en-us/data-center/a100/
+    metadata_status: imported
+
+  - id: nvidia-h100-80gb
+    vendor: NVIDIA
+    model: H100 80GB
+    architecture_generation: Hopper
+    form_factor: SXM5
+    vram_gb: 80
+    usable_vram_mib: 81559
+    memory_bandwidth_gbps: 3350
+    fp16_tflops: 989
+    bf16_tflops: 989
+    fp8_tflops: 1979
+    int8_tops: 1979
+    int4_tops: null
+    supports_vgpu: true
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink
+    power_watts: 700
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: h100
+    metadata_source: https://www.nvidia.com/en-us/data-center/h100/
+    metadata_status: imported
+
+  - id: nvidia-h100-nvl
+    vendor: NVIDIA
+    model: H100 NVL 94GB
+    architecture_generation: Hopper
+    form_factor: PCIe
+    vram_gb: 94
+    usable_vram_mib: 95830
+    memory_bandwidth_gbps: 3900
+    fp16_tflops: 835
+    bf16_tflops: 835
+    fp8_tflops: 1671
+    int8_tops: 1671
+    int4_tops: null
+    supports_vgpu: true
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink bridge
+    power_watts: 400
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: h100-nvl
+    metadata_source: https://www.nvidia.com/en-us/data-center/h100/
+    metadata_status: imported
+    notes: NVLink via 2- or 4-way bridge.
+
+  - id: nvidia-h200-141gb
+    vendor: NVIDIA
+    model: H200 141GB
+    architecture_generation: Hopper
+    form_factor: SXM5
+    vram_gb: 141
+    usable_vram_mib: 143771
+    memory_bandwidth_gbps: 4800
+    fp16_tflops: 989
+    bf16_tflops: 989
+    fp8_tflops: 1979
+    int8_tops: 1979
+    int4_tops: null
+    supports_vgpu: true
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink
+    power_watts: 700
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: h200
+    metadata_source: https://www.nvidia.com/en-us/data-center/h200/
+    metadata_status: imported
+
+  - id: nvidia-b200
+    vendor: NVIDIA
+    model: B200 180GB
+    architecture_generation: Blackwell
+    form_factor: SXM
+    vram_gb: 180
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 8000
+    fp16_tflops: 2250
+    bf16_tflops: 2250
+    fp8_tflops: 4500
+    int8_tops: 4500
+    int4_tops: null
+    supports_vgpu: null
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink
+    power_watts: 1000
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: b200
+    metadata_source: https://www.nvidia.com/en-us/data-center/dgx-b200/
+    metadata_status: imported
+    notes: vGPU support status not imported (treated as unavailable).
+
+  - id: nvidia-gb200
+    vendor: NVIDIA
+    model: GB200 (per GPU)
+    architecture_generation: Blackwell
+    form_factor: Superchip (NVL72)
+    vram_gb: 186
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 8000
+    fp16_tflops: 2500
+    bf16_tflops: 2500
+    fp8_tflops: 5000
+    int8_tops: 5000
+    int4_tops: null
+    supports_vgpu: null
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink (NVL72)
+    power_watts: null
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: gb200
+    metadata_source: https://www.nvidia.com/en-us/data-center/gb200-nvl72/
+    metadata_status: imported
+    notes: Per-GPU share of GB200 NVL72 figures. Rack-scale NVLink domain (72 GPUs) is not modelled.
+
+  - id: nvidia-b300
+    vendor: NVIDIA
+    model: B300 288GB
+    architecture_generation: Blackwell Ultra
+    form_factor: SXM
+    vram_gb: 288
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 8000
+    fp16_tflops: null
+    bf16_tflops: null
+    fp8_tflops: null
+    int8_tops: null
+    int4_tops: null
+    supports_vgpu: null
+    supports_mig: true
+    supports_nvlink: true
+    interconnect_type: NVLink
+    power_watts: null
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: b300
+    metadata_source: https://www.nvidia.com/en-us/data-center/dgx-b300/
+    metadata_status: imported
+    notes: Tensor throughput not imported; compute adequacy is reported as unknown.
+
+  # ------------------------------------------------------------------ AMD Instinct
+  - id: amd-instinct-mi210
+    vendor: AMD
+    model: Instinct MI210
+    architecture_generation: CDNA 2
+    form_factor: PCIe
+    vram_gb: 64
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 1638.4
+    fp16_tflops: 181
+    bf16_tflops: 181
+    fp8_tflops: null
+    int8_tops: 181
+    int4_tops: 181
+    supports_vgpu: null
+    supports_mig: null
+    supports_nvlink: false
+    interconnect_type: Infinity Fabric Link
+    power_watts: 300
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: mi210
+    metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi200/mi210.html
+    metadata_status: imported
+    notes: Runs vLLM / SGLang / TGI on ROCm. No FP8 support.
+
+  - id: amd-instinct-mi250-gcd
+    vendor: AMD
+    model: Instinct MI250 (per GCD)
+    architecture_generation: CDNA 2
+    form_factor: OAM
+    vram_gb: 64
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 1638.4
+    fp16_tflops: 181
+    bf16_tflops: 181
+    fp8_tflops: null
+    int8_tops: 181
+    int4_tops: 181
+    supports_vgpu: null
+    supports_mig: null
+    supports_nvlink: false
+    interconnect_type: Infinity Fabric
+    power_watts: 250
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: mi250
+    metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi200/mi250.html
+    metadata_status: imported
+    notes: >-
+      Each MI250 card (128 GB, 3.2 TB/s, 362 TFLOPS FP16, 500 W) contains two GCDs that software sees as two
+      separate 64 GB GPUs, so it is catalogued per GCD: 2 x MI250 (per GCD) = one card.
+
+  - id: amd-instinct-mi250x-gcd
+    vendor: AMD
+    model: Instinct MI250X (per GCD)
+    architecture_generation: CDNA 2
+    form_factor: OAM
+    vram_gb: 64
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 1638.4
+    fp16_tflops: 191.5
+    bf16_tflops: 191.5
+    fp8_tflops: null
+    int8_tops: 191.5
+    int4_tops: 191.5
+    supports_vgpu: null
+    supports_mig: null
+    supports_nvlink: false
+    interconnect_type: Infinity Fabric
+    power_watts: 280
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: mi250x
+    metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi200/mi250x.html
+    metadata_status: imported
+    notes: >-
+      Each MI250X card (128 GB, 3.2 TB/s, 383 TFLOPS FP16, 560 W) contains two GCDs that software sees as two
+      separate 64 GB GPUs, so it is catalogued per GCD: 2 x MI250X (per GCD) = one card.
+
+  - id: amd-instinct-mi300x
+    vendor: AMD
+    model: Instinct MI300X
+    architecture_generation: CDNA 3
+    form_factor: OAM
+    vram_gb: 192
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 5300
+    fp16_tflops: 1307.4
+    bf16_tflops: 1307.4
+    fp8_tflops: 2614.9
+    int8_tops: 2614.9
+    int4_tops: null
+    supports_vgpu: null
+    supports_mig: true
+    supports_nvlink: false
+    interconnect_type: Infinity Fabric
+    power_watts: 750
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: mi300x
+    metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html
+    metadata_status: imported
+    notes: Supports compute/memory partitioning (CPX/NPS modes). Runs vLLM / SGLang on ROCm; TensorRT-LLM is NVIDIA-only.
+
+  - id: amd-instinct-mi325x
+    vendor: AMD
+    model: Instinct MI325X
+    architecture_generation: CDNA 3
+    form_factor: OAM
+    vram_gb: 256
+    usable_vram_mib: null
+    memory_bandwidth_gbps: 6000
+    fp16_tflops: 1307.4
+    bf16_tflops: 1307.4
+    fp8_tflops: 2614.9
+    int8_tops: 2614.9
+    int4_tops: null
+    supports_vgpu: null
+    supports_mig: true
+    supports_nvlink: false
+    interconnect_type: Infinity Fabric
+    power_watts: 1000
+    cost_per_hour: null
+    availability: unknown
+    openstack_pci_alias: mi325x
+    metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html
+    metadata_status: imported
+    notes: Supports compute/memory partitioning (CPX/NPS modes). Runs vLLM / SGLang on ROCm; TensorRT-LLM is NVIDIA-only.

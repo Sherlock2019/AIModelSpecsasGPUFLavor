@@ -1,0 +1,1116 @@
+# Curated open-weight model catalog.
+#
+# metadata_status:
+#   verified      - checked field-by-field against the official config.json / model card
+#                   (run `python -m app.tools.verify_catalog --promote` to check and promote)
+#   imported      - transcribed from the official config.json / model card, not yet re-verified
+#   user_defined  - entered by a user
+#
+# Architecture fields that are not known are omitted (never guessed). Models without
+# num_layers / kv_heads use the heuristic KV-cache estimate and are labelled as such.
+# total_parameters_b includes embeddings (and vision towers for multimodal checkpoints),
+# because that is what occupies VRAM.
+
+models:
+  # ---------------------------------------------------------------- Llama (Meta)
+  - id: llama-3.2-1b-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 3.2 1B Instruct
+    architecture: dense
+    total_parameters_b: 1.24
+    hidden_size: 2048
+    num_layers: 16
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 64
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Llama 3.2 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct
+
+  - id: llama-3.2-3b-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 3.2 3B Instruct
+    architecture: dense
+    total_parameters_b: 3.21
+    hidden_size: 3072
+    num_layers: 28
+    attention_heads: 24
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Llama 3.2 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct
+
+  - id: llama-3.1-8b-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 3.1 8B Instruct
+    architecture: dense
+    total_parameters_b: 8.03
+    hidden_size: 4096
+    num_layers: 32
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Llama 3.1 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct
+
+  - id: llama-3.1-70b-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 3.1 70B Instruct
+    architecture: dense
+    total_parameters_b: 70.55
+    hidden_size: 8192
+    num_layers: 80
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Llama 3.1 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-3.1-70B-Instruct
+
+  - id: llama-3.1-405b-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 3.1 405B Instruct
+    architecture: dense
+    total_parameters_b: 405.85
+    hidden_size: 16384
+    num_layers: 126
+    attention_heads: 128
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Llama 3.1 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-3.1-405B-Instruct
+    notes: Meta also publishes an official FP8 checkpoint (Llama-3.1-405B-Instruct-FP8).
+
+  - id: llama-3.3-70b-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 3.3 70B Instruct
+    architecture: dense
+    total_parameters_b: 70.55
+    hidden_size: 8192
+    num_layers: 80
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Llama 3.3 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct
+
+  - id: llama-4-scout-17b-16e-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 4 Scout (17B active, 16 experts)
+    architecture: moe
+    total_parameters_b: 109
+    active_parameters_b: 17
+    hidden_size: 5120
+    num_layers: 48
+    attention_heads: 40
+    kv_heads: 8
+    head_dim: 128
+    num_experts: 16
+    experts_per_token: 1
+    max_context_length: 10485760
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp8, int8, int4]
+    license: Llama 4 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct
+    notes: >-
+      Natively multimodal. Most layers use chunked local attention (8192-token chunks); the
+      exact KV formula here assumes full attention on every layer, which is conservative.
+
+  - id: llama-4-maverick-17b-128e-instruct
+    vendor: Meta
+    family: Llama
+    name: Llama 4 Maverick (17B active, 128 experts)
+    architecture: moe
+    total_parameters_b: 400
+    active_parameters_b: 17
+    hidden_size: 5120
+    num_layers: 48
+    attention_heads: 40
+    kv_heads: 8
+    head_dim: 128
+    num_experts: 128
+    experts_per_token: 1
+    max_context_length: 1048576
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp8, int4]
+    license: Llama 4 Community License
+    metadata_status: imported
+    source_url: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct
+    notes: >-
+      Meta also publishes an FP8 checkpoint. Chunked local attention on most layers; exact KV
+      formula assumes full attention on every layer (conservative).
+
+  # ---------------------------------------------------------------- Qwen (Alibaba)
+  - id: qwen2.5-7b-instruct
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen2.5 7B Instruct
+    architecture: dense
+    total_parameters_b: 7.62
+    hidden_size: 3584
+    num_layers: 28
+    attention_heads: 28
+    kv_heads: 4
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen2.5-7B-Instruct
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen2.5-14b-instruct
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen2.5 14B Instruct
+    architecture: dense
+    total_parameters_b: 14.77
+    hidden_size: 5120
+    num_layers: 48
+    attention_heads: 40
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen2.5-14B-Instruct
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen2.5-32b-instruct
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen2.5 32B Instruct
+    architecture: dense
+    total_parameters_b: 32.76
+    hidden_size: 5120
+    num_layers: 64
+    attention_heads: 40
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen2.5-32B-Instruct
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen2.5-72b-instruct
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen2.5 72B Instruct
+    architecture: dense
+    total_parameters_b: 72.71
+    hidden_size: 8192
+    num_layers: 80
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Qwen License
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen2.5-72B-Instruct
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen3-0.6b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 0.6B
+    architecture: dense
+    total_parameters_b: 0.6
+    hidden_size: 1024
+    num_layers: 28
+    attention_heads: 16
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 32768
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-0.6B
+
+  - id: qwen3-1.7b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 1.7B
+    architecture: dense
+    total_parameters_b: 1.7
+    hidden_size: 2048
+    num_layers: 28
+    attention_heads: 16
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 32768
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-1.7B
+
+  - id: qwen3-4b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 4B
+    architecture: dense
+    total_parameters_b: 4.0
+    hidden_size: 2560
+    num_layers: 36
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-4B
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen3-8b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 8B
+    architecture: dense
+    total_parameters_b: 8.2
+    hidden_size: 4096
+    num_layers: 36
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-8B
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen3-14b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 14B
+    architecture: dense
+    total_parameters_b: 14.8
+    hidden_size: 5120
+    num_layers: 40
+    attention_heads: 40
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-14B
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen3-32b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 32B
+    architecture: dense
+    total_parameters_b: 32.8
+    hidden_size: 5120
+    num_layers: 64
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-32B
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen3-30b-a3b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 30B-A3B
+    architecture: moe
+    total_parameters_b: 30.5
+    active_parameters_b: 3.3
+    hidden_size: 2048
+    num_layers: 48
+    attention_heads: 32
+    kv_heads: 4
+    head_dim: 128
+    num_experts: 128
+    experts_per_token: 8
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-30B-A3B
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  - id: qwen3-235b-a22b
+    vendor: Alibaba
+    family: Qwen
+    name: Qwen3 235B-A22B
+    architecture: moe
+    total_parameters_b: 235
+    active_parameters_b: 22
+    hidden_size: 4096
+    num_layers: 94
+    attention_heads: 64
+    kv_heads: 4
+    head_dim: 128
+    num_experts: 128
+    experts_per_token: 8
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/Qwen/Qwen3-235B-A22B
+    notes: 32K native context; 131K with YaRN rope scaling.
+
+  # ---------------------------------------------------------------- Mistral AI
+  - id: mistral-7b-instruct-v0.3
+    vendor: Mistral AI
+    family: Mistral
+    name: Mistral 7B Instruct v0.3
+    architecture: dense
+    total_parameters_b: 7.25
+    hidden_size: 4096
+    num_layers: 32
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 32768
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3
+
+  - id: mistral-small-3.1-24b-instruct
+    vendor: Mistral AI
+    family: Mistral
+    name: Mistral Small 3.1 24B Instruct
+    architecture: dense
+    total_parameters_b: 24
+    hidden_size: 5120
+    num_layers: 40
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai/Mistral-Small-3.1-24B-Instruct-2503
+
+  - id: mistral-large-2-123b
+    vendor: Mistral AI
+    family: Mistral
+    name: Mistral Large 2 (123B)
+    architecture: dense
+    total_parameters_b: 122.6
+    hidden_size: 12288
+    num_layers: 88
+    attention_heads: 96
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Mistral Research License
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai/Mistral-Large-Instruct-2411
+
+  - id: mistral-large-3
+    vendor: Mistral AI
+    family: Mistral
+    name: Mistral Large 3 (675B MoE)
+    architecture: moe
+    total_parameters_b: 675
+    active_parameters_b: 41
+    max_context_length: 262144
+    native_precision: []
+    supported_serving_precisions: [bf16, fp8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai
+    notes: >-
+      Only parameter counts and context length imported. Layer/KV metadata not yet imported,
+      so KV cache uses the heuristic estimate.
+
+  # ---------------------------------------------------------------- Ministral
+  - id: ministral-8b-instruct-2410
+    vendor: Mistral AI
+    family: Ministral
+    name: Ministral 8B Instruct (2410)
+    architecture: dense
+    total_parameters_b: 8.02
+    hidden_size: 4096
+    num_layers: 36
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Mistral Research License
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai/Ministral-8B-Instruct-2410
+    notes: Uses interleaved sliding-window attention; exact KV formula assumes full attention (conservative).
+
+  - id: ministral-3-3b
+    vendor: Mistral AI
+    family: Ministral
+    name: Ministral 3 3B
+    architecture: dense
+    total_parameters_b: 3
+    max_context_length: 262144
+    native_precision: []
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai
+    notes: Parameter count only; layer/KV metadata not yet imported (heuristic KV estimate).
+
+  - id: ministral-3-8b
+    vendor: Mistral AI
+    family: Ministral
+    name: Ministral 3 8B
+    architecture: dense
+    total_parameters_b: 8
+    max_context_length: 262144
+    native_precision: []
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai
+    notes: Parameter count only; layer/KV metadata not yet imported (heuristic KV estimate).
+
+  - id: ministral-3-14b
+    vendor: Mistral AI
+    family: Ministral
+    name: Ministral 3 14B
+    architecture: dense
+    total_parameters_b: 14
+    max_context_length: 262144
+    native_precision: []
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai
+    notes: Parameter count only; layer/KV metadata not yet imported (heuristic KV estimate).
+
+  # ---------------------------------------------------------------- Mixtral
+  - id: mixtral-8x7b-instruct-v0.1
+    vendor: Mistral AI
+    family: Mixtral
+    name: Mixtral 8x7B Instruct
+    architecture: moe
+    total_parameters_b: 46.7
+    active_parameters_b: 12.9
+    hidden_size: 4096
+    num_layers: 32
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    num_experts: 8
+    experts_per_token: 2
+    max_context_length: 32768
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1
+
+  - id: mixtral-8x22b-instruct-v0.1
+    vendor: Mistral AI
+    family: Mixtral
+    name: Mixtral 8x22B Instruct
+    architecture: moe
+    total_parameters_b: 140.6
+    active_parameters_b: 39.1
+    hidden_size: 6144
+    num_layers: 56
+    attention_heads: 48
+    kv_heads: 8
+    head_dim: 128
+    num_experts: 8
+    experts_per_token: 2
+    max_context_length: 65536
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1
+
+  # ---------------------------------------------------------------- Gemma (Google)
+  - id: gemma-3-1b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 3 1B
+    architecture: dense
+    total_parameters_b: 1.0
+    hidden_size: 1152
+    num_layers: 26
+    attention_heads: 4
+    kv_heads: 1
+    head_dim: 256
+    sliding_window: 512
+    max_context_length: 32768
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-3-1b-it
+
+  - id: gemma-2-2b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 2 2B
+    architecture: dense
+    total_parameters_b: 2.61
+    hidden_size: 2304
+    num_layers: 26
+    attention_heads: 8
+    kv_heads: 4
+    head_dim: 256
+    sliding_window: 4096
+    max_context_length: 8192
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-2-2b-it
+
+  - id: gemma-3-4b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 3 4B
+    architecture: dense
+    total_parameters_b: 4.3
+    hidden_size: 2560
+    num_layers: 34
+    attention_heads: 8
+    kv_heads: 4
+    head_dim: 256
+    sliding_window: 1024
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-3-4b-it
+    notes: Multimodal (vision encoder included in parameter count).
+
+  - id: gemma-7b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 7B
+    architecture: dense
+    total_parameters_b: 8.54
+    hidden_size: 3072
+    num_layers: 28
+    attention_heads: 16
+    kv_heads: 16
+    head_dim: 256
+    max_context_length: 8192
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-7b-it
+    notes: Multi-head attention (no GQA) - KV cache is large per token.
+
+  - id: gemma-2-9b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 2 9B
+    architecture: dense
+    total_parameters_b: 9.24
+    hidden_size: 3584
+    num_layers: 42
+    attention_heads: 16
+    kv_heads: 8
+    head_dim: 256
+    sliding_window: 4096
+    max_context_length: 8192
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-2-9b-it
+
+  - id: gemma-3-12b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 3 12B
+    architecture: dense
+    total_parameters_b: 12.2
+    hidden_size: 3840
+    num_layers: 48
+    attention_heads: 16
+    kv_heads: 8
+    head_dim: 256
+    sliding_window: 1024
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-3-12b-it
+    notes: Multimodal. 5 local (sliding-window) layers per global layer; exact KV formula assumes full attention (conservative).
+
+  - id: gemma-2-27b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 2 27B
+    architecture: dense
+    total_parameters_b: 27.2
+    hidden_size: 4608
+    num_layers: 46
+    attention_heads: 32
+    kv_heads: 16
+    head_dim: 128
+    sliding_window: 4096
+    max_context_length: 8192
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-2-27b-it
+
+  - id: gemma-3-27b-it
+    vendor: Google
+    family: Gemma
+    name: Gemma 3 27B
+    architecture: dense
+    total_parameters_b: 27.4
+    hidden_size: 5376
+    num_layers: 62
+    attention_heads: 32
+    kv_heads: 16
+    head_dim: 128
+    sliding_window: 1024
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: Gemma Terms of Use
+    metadata_status: imported
+    source_url: https://huggingface.co/google/gemma-3-27b-it
+    notes: Multimodal. 5 local (sliding-window) layers per global layer; exact KV formula assumes full attention (conservative).
+
+  # ---------------------------------------------------------------- DeepSeek
+  - id: deepseek-r1-distill-qwen-1.5b
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-R1-Distill-Qwen-1.5B
+    architecture: dense
+    total_parameters_b: 1.78
+    hidden_size: 1536
+    num_layers: 28
+    attention_heads: 12
+    kv_heads: 2
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+
+  - id: deepseek-r1-distill-qwen-7b
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-R1-Distill-Qwen-7B
+    architecture: dense
+    total_parameters_b: 7.62
+    hidden_size: 3584
+    num_layers: 28
+    attention_heads: 28
+    kv_heads: 4
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+
+  - id: deepseek-r1-distill-llama-8b
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-R1-Distill-Llama-8B
+    architecture: dense
+    total_parameters_b: 8.03
+    hidden_size: 4096
+    num_layers: 32
+    attention_heads: 32
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT (base model under Llama 3.1 license)
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-8B
+
+  - id: deepseek-r1-distill-qwen-14b
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-R1-Distill-Qwen-14B
+    architecture: dense
+    total_parameters_b: 14.77
+    hidden_size: 5120
+    num_layers: 48
+    attention_heads: 40
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
+
+  - id: deepseek-r1-distill-qwen-32b
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-R1-Distill-Qwen-32B
+    architecture: dense
+    total_parameters_b: 32.76
+    hidden_size: 5120
+    num_layers: 64
+    attention_heads: 40
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+
+  - id: deepseek-r1-distill-llama-70b
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-R1-Distill-Llama-70B
+    architecture: dense
+    total_parameters_b: 70.55
+    hidden_size: 8192
+    num_layers: 80
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT (base model under Llama 3.3 license)
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+
+  - id: deepseek-v3
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-V3
+    architecture: moe
+    total_parameters_b: 671
+    active_parameters_b: 37
+    hidden_size: 7168
+    num_layers: 61
+    attention_heads: 128
+    attention_type: mla
+    kv_lora_rank: 512
+    qk_rope_head_dim: 64
+    num_experts: 256
+    experts_per_token: 8
+    max_context_length: 131072
+    native_precision: [fp8]
+    supported_serving_precisions: [fp8, bf16, int8, int4]
+    license: DeepSeek Model License / MIT (code)
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-V3
+    notes: >-
+      Multi-head Latent Attention (MLA): KV cache stores a compressed 512-dim latent plus a
+      64-dim RoPE key per layer. HF checkpoint is 685B including the multi-token-prediction module.
+
+  - id: deepseek-r1
+    vendor: DeepSeek
+    family: DeepSeek
+    name: DeepSeek-R1 (full)
+    architecture: moe
+    total_parameters_b: 671
+    active_parameters_b: 37
+    hidden_size: 7168
+    num_layers: 61
+    attention_heads: 128
+    attention_type: mla
+    kv_lora_rank: 512
+    qk_rope_head_dim: 64
+    num_experts: 256
+    experts_per_token: 8
+    max_context_length: 131072
+    native_precision: [fp8]
+    supported_serving_precisions: [fp8, bf16, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/deepseek-ai/DeepSeek-R1
+    notes: Same architecture as DeepSeek-V3 (MLA). Reasoning outputs are long; size output tokens generously.
+
+  # ---------------------------------------------------------------- Phi (Microsoft)
+  - id: phi-3-mini-4k-instruct
+    vendor: Microsoft
+    family: Phi
+    name: Phi-3 Mini 4K Instruct
+    architecture: dense
+    total_parameters_b: 3.82
+    hidden_size: 3072
+    num_layers: 32
+    attention_heads: 32
+    kv_heads: 32
+    head_dim: 96
+    max_context_length: 4096
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/microsoft/Phi-3-mini-4k-instruct
+
+  - id: phi-3-mini-128k-instruct
+    vendor: Microsoft
+    family: Phi
+    name: Phi-3 Mini 128K Instruct
+    architecture: dense
+    total_parameters_b: 3.82
+    hidden_size: 3072
+    num_layers: 32
+    attention_heads: 32
+    kv_heads: 32
+    head_dim: 96
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/microsoft/Phi-3-mini-128k-instruct
+    notes: Multi-head attention (no GQA) - long contexts need a lot of KV cache.
+
+  - id: phi-3-medium-128k-instruct
+    vendor: Microsoft
+    family: Phi
+    name: Phi-3 Medium 128K Instruct
+    architecture: dense
+    total_parameters_b: 13.96
+    hidden_size: 5120
+    num_layers: 40
+    attention_heads: 40
+    kv_heads: 10
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/microsoft/Phi-3-medium-128k-instruct
+
+  - id: phi-4
+    vendor: Microsoft
+    family: Phi
+    name: Phi-4 14B
+    architecture: dense
+    total_parameters_b: 14.66
+    hidden_size: 5120
+    num_layers: 40
+    attention_heads: 40
+    kv_heads: 10
+    head_dim: 128
+    max_context_length: 16384
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/microsoft/phi-4
+
+  # ---------------------------------------------------------------- GLM (Zhipu AI / Z.ai)
+  - id: glm-4.5-air
+    vendor: Zhipu AI
+    family: GLM
+    name: GLM-4.5 Air
+    architecture: moe
+    total_parameters_b: 106
+    active_parameters_b: 12
+    hidden_size: 4096
+    num_layers: 46
+    attention_heads: 96
+    kv_heads: 8
+    head_dim: 128
+    num_experts: 128
+    experts_per_token: 8
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/zai-org/GLM-4.5-Air
+
+  - id: glm-4.5
+    vendor: Zhipu AI
+    family: GLM
+    name: GLM-4.5
+    architecture: moe
+    total_parameters_b: 355
+    active_parameters_b: 32
+    hidden_size: 5120
+    num_layers: 92
+    attention_heads: 96
+    kv_heads: 8
+    head_dim: 128
+    num_experts: 160
+    experts_per_token: 8
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/zai-org/GLM-4.5
+
+  - id: glm-4.6
+    vendor: Zhipu AI
+    family: GLM
+    name: GLM-4.6
+    architecture: moe
+    total_parameters_b: 355
+    active_parameters_b: 32
+    hidden_size: 5120
+    num_layers: 92
+    attention_heads: 96
+    kv_heads: 8
+    head_dim: 128
+    num_experts: 160
+    experts_per_token: 8
+    max_context_length: 202752
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp8, int8, int4]
+    license: MIT
+    metadata_status: imported
+    source_url: https://huggingface.co/zai-org/GLM-4.6
+
+  # ---------------------------------------------------------------- Command R (Cohere)
+  - id: command-r-08-2024
+    vendor: Cohere
+    family: Command R
+    name: Command R (08-2024, 32B)
+    architecture: dense
+    total_parameters_b: 32.3
+    hidden_size: 8192
+    num_layers: 40
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: CC-BY-NC 4.0
+    metadata_status: imported
+    source_url: https://huggingface.co/CohereLabs/c4ai-command-r-08-2024
+
+  - id: command-r-plus-08-2024
+    vendor: Cohere
+    family: Command R
+    name: Command R+ (08-2024, 104B)
+    architecture: dense
+    total_parameters_b: 104
+    hidden_size: 12288
+    num_layers: 64
+    attention_heads: 96
+    kv_heads: 8
+    head_dim: 128
+    max_context_length: 131072
+    native_precision: [bf16]
+    supported_serving_precisions: [bf16, fp16, fp8, int8, int4]
+    license: CC-BY-NC 4.0
+    metadata_status: imported
+    source_url: https://huggingface.co/CohereLabs/c4ai-command-r-plus-08-2024
+
+  # ---------------------------------------------------------------- gpt-oss (OpenAI)
+  - id: gpt-oss-20b
+    vendor: OpenAI
+    family: gpt-oss
+    name: gpt-oss-20b
+    architecture: moe
+    total_parameters_b: 20.9
+    active_parameters_b: 3.6
+    hidden_size: 2880
+    num_layers: 24
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 64
+    sliding_window: 128
+    num_experts: 32
+    experts_per_token: 4
+    max_context_length: 131072
+    native_precision: [mxfp4]
+    supported_serving_precisions: [mxfp4, bf16]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/openai/gpt-oss-20b
+    notes: MoE weights ship in MXFP4, attention/embeddings in BF16. Alternating sliding-window layers.
+
+  - id: gpt-oss-120b
+    vendor: OpenAI
+    family: gpt-oss
+    name: gpt-oss-120b
+    architecture: moe
+    total_parameters_b: 116.8
+    active_parameters_b: 5.1
+    hidden_size: 2880
+    num_layers: 36
+    attention_heads: 64
+    kv_heads: 8
+    head_dim: 64
+    sliding_window: 128
+    num_experts: 128
+    experts_per_token: 4
+    max_context_length: 131072
+    native_precision: [mxfp4]
+    supported_serving_precisions: [mxfp4, bf16]
+    license: Apache 2.0
+    metadata_status: imported
+    source_url: https://huggingface.co/openai/gpt-oss-120b
+    notes: MoE weights ship in MXFP4, attention/embeddings in BF16. Alternating sliding-window layers.

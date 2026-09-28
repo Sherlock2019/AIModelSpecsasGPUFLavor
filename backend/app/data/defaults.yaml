@@ -1,0 +1,156 @@
+# Engine defaults. Every value here is a configurable estimate, not a measured fact.
+# These values seed the `engine` settings row on first start; edit them later via
+# Settings in the UI or PUT /api/v1/settings.
+
+precision:
+  # bytes_per_parameter is the nominal storage size. default_overhead_factor accounts for
+  # quantization scales/zero-points, unquantized layers (embeddings, norms, lm_head) and
+  # packing. `compute` names the GPU throughput column used for compute estimates.
+  fp32:  {label: FP32,  bytes_per_parameter: 4.0,     default_overhead_factor: 1.00, flavor_tag: FP32,  compute: fp32}
+  fp16:  {label: FP16,  bytes_per_parameter: 2.0,     default_overhead_factor: 1.00, flavor_tag: FP16,  compute: fp16}
+  bf16:  {label: BF16,  bytes_per_parameter: 2.0,     default_overhead_factor: 1.00, flavor_tag: BF16,  compute: bf16}
+  fp8:   {label: FP8,   bytes_per_parameter: 1.0,     default_overhead_factor: 1.02, flavor_tag: FP8,   compute: fp8}
+  int8:  {label: INT8,  bytes_per_parameter: 1.0,     default_overhead_factor: 1.05, flavor_tag: Q8,    compute: int8}
+  int4:  {label: INT4,  bytes_per_parameter: 0.5,     default_overhead_factor: 1.10, flavor_tag: Q4,    compute: fp16}
+  # MXFP4: 4-bit elements + one shared 8-bit scale per 32 elements = 4.25 bits.
+  mxfp4: {label: MXFP4, bytes_per_parameter: 0.53125, default_overhead_factor: 1.05, flavor_tag: MXFP4, compute: fp16}
+
+kv_precision:
+  fp16: {label: FP16, bytes_per_element: 2.0}
+  bf16: {label: BF16, bytes_per_element: 2.0}
+  fp8:  {label: FP8,  bytes_per_element: 1.0}
+  int8: {label: INT8, bytes_per_element: 1.0}
+
+frameworks:
+  vllm:         {label: vLLM,           base_overhead_gb: 1.5,  workspace_percent: 5,  communication_overhead_gb_per_gpu: 0.5}
+  sglang:       {label: SGLang,         base_overhead_gb: 1.5,  workspace_percent: 5,  communication_overhead_gb_per_gpu: 0.5}
+  tensorrt_llm: {label: TensorRT-LLM,   base_overhead_gb: 2.0,  workspace_percent: 7,  communication_overhead_gb_per_gpu: 0.75}
+  tgi:          {label: TGI,            base_overhead_gb: 1.5,  workspace_percent: 5,  communication_overhead_gb_per_gpu: 0.5}
+  pytorch:      {label: PyTorch / HF Transformers, base_overhead_gb: 2.0, workspace_percent: 10, communication_overhead_gb_per_gpu: 1.0}
+
+environments:
+  production:  {label: Production,  default_safety_margin_percent: 15}
+  development: {label: Development, default_safety_margin_percent: 10}
+
+priorities:
+  economy:
+    label: Lowest cost
+    safety_margin_percent: 15
+    tokens_per_second_per_user: 10
+    comfortable_utilization: 0.97
+    allowed_vgpu_sharing: [time_sliced, mig]
+    escalate_for_throughput: false
+    flavor_tier: prod
+    weights: {units: 10, waste: 6, tight: 1, bandwidth: 2, compute: 2, availability: 3, cost: 8, bandwidth_bonus: 0, vgpu: -3}
+  balanced:
+    label: Balanced
+    safety_margin_percent: 15
+    tokens_per_second_per_user: 15
+    comfortable_utilization: 0.90
+    allowed_vgpu_sharing: [time_sliced, mig]
+    escalate_for_throughput: false
+    flavor_tier: prod
+    weights: {units: 10, waste: 4, tight: 4, bandwidth: 6, compute: 4, availability: 3, cost: 4, bandwidth_bonus: 0, vgpu: 0}
+  performance:
+    label: Performance
+    safety_margin_percent: 20
+    tokens_per_second_per_user: 25
+    comfortable_utilization: 0.85
+    allowed_vgpu_sharing: [mig]
+    escalate_for_throughput: true
+    flavor_tier: performance
+    weights: {units: 6, waste: 1, tight: 6, bandwidth: 10, compute: 8, availability: 3, cost: 2, bandwidth_bonus: 3, vgpu: 5}
+  maximum:
+    label: Max performance
+    safety_margin_percent: 20
+    tokens_per_second_per_user: 40
+    comfortable_utilization: 0.80
+    allowed_vgpu_sharing: []
+    escalate_for_throughput: true
+    flavor_tier: max
+    weights: {units: 2, waste: 0, tight: 8, bandwidth: 12, compute: 10, availability: 2, cost: 0, bandwidth_bonus: 8, vgpu: 10}
+
+context:
+  default_average_input_tokens: 4000
+  default_average_output_tokens: 1000
+
+efficiency:
+  # Fraction of datasheet bandwidth / tensor throughput a serving stack typically reaches.
+  # Used only for relative roofline estimates, never presented as measured performance.
+  bandwidth_efficiency: 0.70
+  compute_mfu: 0.35
+  mig_total_slices: 7
+
+# Used only when a model lacks layer/KV-head metadata:
+# KV bytes/token (16-bit) ~= coefficient * sqrt(total_parameters_b). Calibrated on GQA models
+# (Llama 3.x, Qwen2.5/3); conservative for MoE and MLA models.
+heuristic_kv_bytes_per_token_coefficient: 46000
+
+compute_classes:   # upper bound of active_parameters_b x requested aggregate decode tokens/s
+  - {name: low,       max: 500}
+  - {name: medium,    max: 2500}
+  - {name: high,      max: 10000}
+  - {name: very_high, max: 40000}
+  - {name: extreme,   max: null}
+
+bandwidth_classes:  # upper bound of required decode memory bandwidth (GB/s)
+  - {name: low,       max: 200}
+  - {name: medium,    max: 800}
+  - {name: high,      max: 2500}
+  - {name: very_high, max: null}
+
+gpu_compute_classes:  # upper bound of a GPU's dense FP16/BF16 TFLOPS ("AI compute")
+  - {name: low,       max: 100}
+  - {name: medium,    max: 300}
+  - {name: high,      max: 700}
+  - {name: very_high, max: 1500}
+  - {name: extreme,   max: null}
+
+gpu_bandwidth_classes:  # upper bound of a GPU's memory bandwidth in GB/s ("GPU memory speed")
+  - {name: low,       max: 500}
+  - {name: medium,    max: 1200}
+  - {name: high,      max: 3000}
+  - {name: very_high, max: null}
+
+memory_intensity:  # upper bound of required VRAM (GB)
+  - {name: low,       max: 16}
+  - {name: medium,    max: 48}
+  - {name: high,      max: 160}
+  - {name: very_high, max: 640}
+  - {name: extreme,   max: null}
+
+gpu_counts: [1, 2, 4, 8, 16]
+gpus_per_node: 8
+
+flavor_size_classes:
+  - {label: 1B,   max_total_b: 1.5}
+  - {label: 3B,   max_total_b: 4.5}
+  - {label: 8B,   max_total_b: 9.5}
+  - {label: 14B,  max_total_b: 16}
+  - {label: 32B,  max_total_b: 36}
+  - {label: 70B,  max_total_b: 80}
+  - {label: 120B, max_total_b: 130}
+  - {label: 200B, max_total_b: 250}
+  - {label: 400B, max_total_b: 450}
+  # anything larger -> XL
+
+openstack:
+  vgpu_vcpus: 8
+  vcpus_per_gpu: 16
+  max_vcpus: 128
+  min_ram_gb_vgpu: 32
+  min_ram_gb_full: 64
+  ram_weights_factor: 1.5   # host RAM >= weights * factor + base (model load / page cache)
+  ram_base_gb: 16
+  ram_round_gb: 16
+  min_disk_gb: 100
+  disk_weights_factor: 2.0
+
+cost:
+  hours_per_day: 24
+  hours_per_month: 730
+  vm_cost_per_hour: null        # optional per-VM surcharge (CPU/RAM) added to every option
+  unknown_cost_penalty: 0.5     # ranking penalty for options without a price when others have one
+
+ranking:
+  use_inventory: true

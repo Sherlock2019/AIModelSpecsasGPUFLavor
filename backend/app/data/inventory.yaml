@@ -1,0 +1,5 @@
+# Demo inventory for the StaticInventoryAdapter. Replace with your own site data in the
+# GPU Catalog admin page (or PUT /api/v1/inventory). These numbers are illustrative only.
+inventory:
+  - {gpu_id: nvidia-l40s,      site: demo-site, installed: 12, available: 7}
+  - {gpu_id: nvidia-h100-80gb, site: demo-site, installed: 4,  available: 1}

@@ -1,0 +1,52 @@
+# NVIDIA vGPU (C-series, compute) profiles. Names and per-GPU limits are transcribed from the
+# NVIDIA Virtual GPU Software User Guide; verify against the vGPU release you run.
+# vram_gb is the profile framebuffer in GiB.
+#
+# sharing_mode:
+#   time_sliced - VMs share all SMs in turn; worst-case compute share = 1 / max_instances_per_gpu
+#   mig         - hardware-partitioned SMs and memory; compute share = mig_compute_slices / 7
+#
+# Never assume equal performance just because VRAM matches.
+
+vgpu_profiles:
+  # T4 (16 GB)
+  - {profile_name: T4-16C, physical_gpu: nvidia-t4, vram_gb: 16, max_instances_per_gpu: 1, sharing_mode: time_sliced}
+  - {profile_name: T4-8C,  physical_gpu: nvidia-t4, vram_gb: 8,  max_instances_per_gpu: 2, sharing_mode: time_sliced}
+  - {profile_name: T4-4C,  physical_gpu: nvidia-t4, vram_gb: 4,  max_instances_per_gpu: 4, sharing_mode: time_sliced}
+
+  # A10 (24 GB)
+  - {profile_name: A10-24C, physical_gpu: nvidia-a10, vram_gb: 24, max_instances_per_gpu: 1, sharing_mode: time_sliced}
+  - {profile_name: A10-12C, physical_gpu: nvidia-a10, vram_gb: 12, max_instances_per_gpu: 2, sharing_mode: time_sliced}
+  - {profile_name: A10-8C,  physical_gpu: nvidia-a10, vram_gb: 8,  max_instances_per_gpu: 3, sharing_mode: time_sliced}
+  - {profile_name: A10-6C,  physical_gpu: nvidia-a10, vram_gb: 6,  max_instances_per_gpu: 4, sharing_mode: time_sliced}
+  - {profile_name: A10-4C,  physical_gpu: nvidia-a10, vram_gb: 4,  max_instances_per_gpu: 6, sharing_mode: time_sliced}
+
+  # L4 (24 GB)
+  - {profile_name: L4-24C, physical_gpu: nvidia-l4, vram_gb: 24, max_instances_per_gpu: 1, sharing_mode: time_sliced}
+  - {profile_name: L4-12C, physical_gpu: nvidia-l4, vram_gb: 12, max_instances_per_gpu: 2, sharing_mode: time_sliced}
+  - {profile_name: L4-8C,  physical_gpu: nvidia-l4, vram_gb: 8,  max_instances_per_gpu: 3, sharing_mode: time_sliced}
+  - {profile_name: L4-6C,  physical_gpu: nvidia-l4, vram_gb: 6,  max_instances_per_gpu: 4, sharing_mode: time_sliced}
+  - {profile_name: L4-4C,  physical_gpu: nvidia-l4, vram_gb: 4,  max_instances_per_gpu: 6, sharing_mode: time_sliced}
+
+  # L40S (48 GB)
+  - {profile_name: L40S-48C, physical_gpu: nvidia-l40s, vram_gb: 48, max_instances_per_gpu: 1,  sharing_mode: time_sliced}
+  - {profile_name: L40S-24C, physical_gpu: nvidia-l40s, vram_gb: 24, max_instances_per_gpu: 2,  sharing_mode: time_sliced}
+  - {profile_name: L40S-16C, physical_gpu: nvidia-l40s, vram_gb: 16, max_instances_per_gpu: 3,  sharing_mode: time_sliced}
+  - {profile_name: L40S-12C, physical_gpu: nvidia-l40s, vram_gb: 12, max_instances_per_gpu: 4,  sharing_mode: time_sliced}
+  - {profile_name: L40S-8C,  physical_gpu: nvidia-l40s, vram_gb: 8,  max_instances_per_gpu: 6,  sharing_mode: time_sliced}
+  - {profile_name: L40S-6C,  physical_gpu: nvidia-l40s, vram_gb: 6,  max_instances_per_gpu: 8,  sharing_mode: time_sliced}
+  - {profile_name: L40S-4C,  physical_gpu: nvidia-l40s, vram_gb: 4,  max_instances_per_gpu: 12, sharing_mode: time_sliced}
+
+  # A100 80GB - time-sliced and MIG-backed
+  - {profile_name: A100D-40C,   physical_gpu: nvidia-a100-80gb, vram_gb: 40, max_instances_per_gpu: 2, sharing_mode: time_sliced}
+  - {profile_name: A100D-20C,   physical_gpu: nvidia-a100-80gb, vram_gb: 20, max_instances_per_gpu: 4, sharing_mode: time_sliced}
+  - {profile_name: A100D-3-40C, physical_gpu: nvidia-a100-80gb, vram_gb: 40, max_instances_per_gpu: 2, sharing_mode: mig, mig_compute_slices: 3}
+  - {profile_name: A100D-2-20C, physical_gpu: nvidia-a100-80gb, vram_gb: 20, max_instances_per_gpu: 3, sharing_mode: mig, mig_compute_slices: 2}
+  - {profile_name: A100D-1-10C, physical_gpu: nvidia-a100-80gb, vram_gb: 10, max_instances_per_gpu: 7, sharing_mode: mig, mig_compute_slices: 1}
+
+  # H100 80GB SXM - time-sliced and MIG-backed
+  - {profile_name: H100XM-40C,   physical_gpu: nvidia-h100-80gb, vram_gb: 40, max_instances_per_gpu: 2, sharing_mode: time_sliced}
+  - {profile_name: H100XM-20C,   physical_gpu: nvidia-h100-80gb, vram_gb: 20, max_instances_per_gpu: 4, sharing_mode: time_sliced}
+  - {profile_name: H100XM-3-40C, physical_gpu: nvidia-h100-80gb, vram_gb: 40, max_instances_per_gpu: 2, sharing_mode: mig, mig_compute_slices: 3}
+  - {profile_name: H100XM-2-20C, physical_gpu: nvidia-h100-80gb, vram_gb: 20, max_instances_per_gpu: 3, sharing_mode: mig, mig_compute_slices: 2}
+  - {profile_name: H100XM-1-10C, physical_gpu: nvidia-h100-80gb, vram_gb: 10, max_instances_per_gpu: 7, sharing_mode: mig, mig_compute_slices: 1}

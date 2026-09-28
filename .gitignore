@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+backend/var/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+test-results/
+playwright-report/
+
+# Launcher (start.sh)
+.tools/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+.env
