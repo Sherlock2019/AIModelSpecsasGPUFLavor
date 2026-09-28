@@ -46,13 +46,13 @@ cd AIModelSpecsasGPUFLavor
 ./start.sh
 ```
 
-The first run takes a few minutes. After that it starts in seconds.
+The first run takes a minute or two (mostly installing Python packages). After that it starts in seconds.
 
 | Step | What `./start.sh` does |
 |---|---|
 | Python | Uses Python 3.10+, or installs it with `dnf` / `apt` when missing |
 | Backend | Creates `backend/.venv` and installs dependencies |
-| Web UI | Downloads Node.js into `./.tools` (checksum-verified, build-time only) and builds the UI |
+| Web UI | Uses the **prebuilt UI shipped in the repo** (`frontend/dist`), so no Node.js or build is needed. It rebuilds only when the UI sources changed: Node.js is downloaded into `./.tools` (checksum-verified), and on machines with under ~2 GB of RAM + swap a temporary 2 GB swap file is added first |
 | Config | Creates `.env` with `PORT`, `HOST` and a generated `ADMIN_TOKEN` |
 | Serve | Starts **one process** serving the web UI and the API on `0.0.0.0:<PORT>` |
 | Report | Prints the local and **public** URL and the admin token |
@@ -70,8 +70,8 @@ AI Model → GPU Flavor Calculator is running
 
 ### AWS EC2 checklist
 
-1. **Instance:** Amazon Linux 2023 or Ubuntu 22.04/24.04, x86 or Graviton. A t3.small or larger is enough. On 1 GB
-   instances, add swap before the first run, because the one-time UI build needs memory.
+1. **Instance:** Amazon Linux 2023 or Ubuntu 22.04/24.04, x86 or Graviton. A t3.micro (1 GB) runs it; a t3.small or
+   larger is more comfortable.
 2. **Security group:** add an inbound rule for **TCP 8080** (or the port the launcher printed), ideally with source
    *My IP*.
 3. **Keep it running:** `./start.sh install-service` runs it with systemd across reboots and SSH logouts.
@@ -251,7 +251,8 @@ The **Admin** section of the sidebar needs the admin token for changes.
 | `Port 9000 is already in use … Choose another` | You pinned a busy port with `PORT=9000`. Pick another, or stop the other program. |
 | The public URL doesn't load | Check `./start.sh status`. Then check that the security group allows the printed port from your IP. Also check that the instance has a public IP (or use its Elastic IP). |
 | `Did not become healthy` | Run `./start.sh logs` for the reason. On very small instances, the first start can be slow; run `./start.sh` again. |
-| The UI build fails (`JavaScript heap out of memory` / killed) | Add swap (e.g. 2 GB) on 1 GB instances, then run `./start.sh build`. |
+| Stuck at `==> Building the web UI` | You are on an older version that always built the UI; small instances (1 GB) can run out of memory there. Press Ctrl-C, run `git pull`, then `./start.sh`. The current version ships the UI prebuilt. |
+| The UI build fails (`JavaScript heap out of memory` / killed) | Only happens when the UI must be rebuilt. The launcher adds a 2 GB swap file on small machines automatically; if that was not possible, run `sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`, then `./start.sh build`. |
 | "Admin token required" when saving | Paste the token from `grep ADMIN_TOKEN .env` into **Settings → Admin access**. |
 | Start over with a clean database | Run `./start.sh stop`, then `rm backend/var/gpucalc.db*`, then `./start.sh`. The catalogs are re-seeded. |
 | Port 80 without `sudo` | Use the default 8080 and a load balancer, or run `sudo PORT=80 ./start.sh`. |
@@ -329,6 +330,9 @@ npm run dev                       # http://localhost:5173, proxies /api to :8000
 npm test                          # Vitest
 npm run e2e                       # Playwright; needs the app running (E2E_BASE_URL to change)
 ```
+
+After changing anything under `frontend/`, run `./start.sh build` and commit `frontend/dist` (including
+`dist/.source-hash`) so servers keep starting without a build.
 
 Docker Compose is also available: `docker compose up --build`, then open http://localhost:8080.
 

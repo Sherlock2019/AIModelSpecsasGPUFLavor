@@ -157,24 +157,68 @@ ensure_node() {
   ok "Node.js $(node --version) ready"
 }
 
+# The repository ships a prebuilt UI (frontend/dist) stamped with a fingerprint of the UI sources.
+# The UI is rebuilt only when the sources no longer match that fingerprint, so a fresh clone
+# starts without Node.js or a build.
+ui_source_hash() {
+  (
+    cd "$FRONTEND"
+    find src index.html package.json package-lock.json vite.config.ts tsconfig.json -type f -print0 2>/dev/null \
+      | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1
+  )
+}
+
 ui_stale() {
-  local index="$FRONTEND/dist/index.html"
-  [[ ! -f "$index" ]] && return 0
-  [[ -n "$(find "$FRONTEND/src" "$FRONTEND/index.html" "$FRONTEND/package.json" "$FRONTEND/vite.config.ts" -newer "$index" -print -quit)" ]]
+  local stamp="$FRONTEND/dist/.source-hash"
+  [[ -f "$FRONTEND/dist/index.html" && -f "$stamp" ]] || return 0
+  [[ "$(cat "$stamp")" != "$(ui_source_hash)" ]]
+}
+
+ensure_build_memory() {
+  # Building the UI needs ~1.5 GB. On 1 GB instances without swap it can stall or be killed.
+  local mem swap
+  mem=$(awk '/^MemTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+  swap=$(awk '/^SwapTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 0)
+  (( mem + swap >= 1800 )) && return 0
+  warn "Only ${mem} MB RAM and ${swap} MB swap: the one-time UI build may run out of memory."
+  if [[ "${GPUCALC_AUTO_SWAP:-1}" != "1" ]]; then
+    warn "GPUCALC_AUTO_SWAP=0: not adding swap. If the build is killed, add swap and run ./start.sh build."
+    return 0
+  fi
+  if [[ $EUID -ne 0 ]] && ! command -v sudo >/dev/null; then
+    warn "No sudo available to add swap. If the build is killed, add swap and run ./start.sh build."
+    return 0
+  fi
+  if [[ -e /swapfile-gpucalc ]]; then
+    as_root swapon /swapfile-gpucalc 2>/dev/null || true
+    return 0
+  fi
+  info "Adding a temporary 2 GB swap file (/swapfile-gpucalc, active until reboot; GPUCALC_AUTO_SWAP=0 skips this)"
+  if { as_root fallocate -l 2G /swapfile-gpucalc || as_root dd if=/dev/zero of=/swapfile-gpucalc bs=1M count=2048 status=none; } \
+    && as_root chmod 600 /swapfile-gpucalc && as_root mkswap /swapfile-gpucalc >/dev/null && as_root swapon /swapfile-gpucalc; then
+    ok "Swap enabled"
+  else
+    warn "Could not add swap; continuing. If the build is killed, add swap manually and run ./start.sh build."
+  fi
 }
 
 build_ui() {
   ensure_node
+  ensure_build_memory
   cd "$FRONTEND"
   if [[ ! -d node_modules || package-lock.json -nt node_modules/.package-lock.json ]]; then
     info "Installing web UI dependencies"
     npm ci --no-audit --no-fund --loglevel=error
   fi
-  info "Building the web UI"
+  info "Building the web UI (about a minute; a few minutes on small instances)"
+  local started=$SECONDS
   # Vite only; type checking is a development step and needs extra memory on small instances.
-  NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1024}" npx vite build --logLevel warn
+  if ! NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1024}" npx vite build --logLevel info; then
+    die "UI build failed. On small instances add swap (see README → Troubleshooting) and run ./start.sh build"
+  fi
+  ui_source_hash > dist/.source-hash
   cd "$ROOT"
-  ok "Web UI built"
+  ok "Web UI built in $((SECONDS - started)) s"
 }
 
 prepare() {
