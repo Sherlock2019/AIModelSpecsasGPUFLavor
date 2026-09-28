@@ -54,6 +54,10 @@ e.g. `http://<ec2-public-ip>:8080`.
 | `./start.sh install-service` / `uninstall-service` | Run at boot with systemd |
 | `./start.sh build` | Re-install dependencies and rebuild the UI (after `git pull`) |
 
+If port 8080 is already taken by another program, the launcher uses the next free port (8081, 8082, …), saves it
+in `.env` and prints it. Open that port in the security group, or pin one with `PORT=9000 ./start.sh`. An explicit
+port is never changed; if it is busy, the launcher stops with a message.
+
 Settings live in `.env`, created on the first run:
 
 - `PORT` (default 8080)

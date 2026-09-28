@@ -32,12 +32,18 @@ VENV="$BACKEND/.venv"
 NODE_MAJOR=22
 SERVICE=gpucalc
 
+# A port given on the command line (PORT=9000 ./start.sh) is a hard requirement; a port from .env or
+# the default may be moved to the next free one when busy (and the new one is saved to .env).
+PORT_EXPLICIT=0
+[[ -n "${PORT:-}" ]] && PORT_EXPLICIT=1
+CLI_PORT="${PORT:-}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   set +a
 fi
+[[ -n "$CLI_PORT" ]] && PORT="$CLI_PORT"
 PORT="${PORT:-8080}"
 HOST="${HOST:-0.0.0.0}"
 
@@ -59,7 +65,7 @@ as_root() {
 ensure_env() {
   mkdir -p "$RUN_DIR"
   if [[ ! -f "$ENV_FILE" ]]; then
-    printf '# LLM GPU Calculator settings (read by start.sh)\nPORT=%s\nHOST=%s\n' "$PORT" "$HOST" > "$ENV_FILE"
+    printf '# AI Model -> GPU Flavor Calculator settings (read by start.sh)\nPORT=%s\nHOST=%s\n' "$PORT" "$HOST" > "$ENV_FILE"
     chmod 600 "$ENV_FILE"
   fi
   if [[ -z "${ADMIN_TOKEN+x}" ]]; then
@@ -187,13 +193,50 @@ running_pid() {
   return 1
 }
 
+port_busy() {
+  if command -v ss >/dev/null; then
+    ss -ltnH "sport = :$1" 2>/dev/null | grep -q .
+  else
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+  fi
+}
+
+port_owner() {
+  # Process name holding the port, when the OS lets us see it (not for other users' processes).
+  command -v ss >/dev/null || return 0
+  { ss -ltnpH "sport = :$1" 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2; } || true
+}
+
+set_env_var() {
+  # Replace KEY=... in .env, or append it.
+  if grep -q "^$1=" "$ENV_FILE" 2>/dev/null; then
+    sed -i "s|^$1=.*|$1=$2|" "$ENV_FILE"
+  else
+    printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"
+  fi
+}
+
 check_port() {
   if (( PORT < 1024 )) && [[ $EUID -ne 0 ]]; then
     die "Port $PORT needs root. Use PORT=8080 (default) or run 'sudo ./start.sh'."
   fi
-  if command -v ss >/dev/null && ss -ltnH "sport = :$PORT" 2>/dev/null | grep -q .; then
-    die "Port $PORT is already in use. Set another one, e.g. PORT=8090 ./start.sh"
+  port_busy "$PORT" || return 0
+  local owner by="" candidate=""
+  owner="$(port_owner "$PORT")"
+  [[ -n "$owner" ]] && by=" by '$owner'"
+  if (( PORT_EXPLICIT )); then
+    die "Port $PORT is already in use${by}. Choose another, e.g. PORT=$((PORT + 10)) ./start.sh"
   fi
+  local p
+  for p in $(seq $((PORT + 1)) $((PORT + 50))); do
+    if ! port_busy "$p"; then candidate=$p; break; fi
+  done
+  [[ -n "$candidate" ]] || die "Port $PORT is in use${by} and no free port found up to $((PORT + 50)). Set one with PORT=<port> ./start.sh"
+  warn "Port $PORT is already in use${by}; using port $candidate instead (saved in .env)."
+  warn "Open TCP $candidate in the EC2 security group, or pin a port with PORT=<port> ./start.sh."
+  PORT=$candidate
+  export PORT
+  set_env_var PORT "$PORT"
 }
 
 uvicorn_cmd() {
