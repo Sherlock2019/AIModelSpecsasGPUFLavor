@@ -25,9 +25,12 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="LLM GPU Sizing Calculator",
-    version="1.0.0",
-    description="Model-first GPU sizing: pick a model and workload, get VRAM, GPU and AI flavor recommendations.",
+    title="AI Model → GPU Flavor Calculator",
+    version="2.0.0",
+    description=(
+        "Size LLMs, AI VM flavors and custom ML models to GPU memory, NVIDIA/AMD GPUs (vGPU, dedicated, multi-GPU), "
+        "AI flavors and OpenStack flavor recommendations."
+    ),
     lifespan=lifespan,
 )
 

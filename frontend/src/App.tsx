@@ -57,8 +57,8 @@ function Logo() {
         <path d="M13 8v3M19 8v3M13 21v3M19 21v3" stroke="white" strokeWidth="2.4" />
       </svg>
       <div className="leading-tight">
-        <div className="text-sm font-semibold text-ink">LLM GPU Sizing</div>
-        <div className="text-[11px] text-ink-3">From model to infrastructure</div>
+        <div className="text-sm font-semibold text-ink">AI GPU Sizing</div>
+        <div className="text-[11px] text-ink-3">From AI model to GPU flavor</div>
       </div>
     </div>
   )

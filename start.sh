@@ -201,11 +201,15 @@ uvicorn_cmd() {
 }
 
 wait_healthy() {
+  # The very first start compiles Python bytecode and seeds the database; allow up to 2 minutes.
   local i
-  for i in $(seq 1 40); do
-    curl -fs -m 2 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && return 0
+  for i in $(seq 1 240); do
+    curl -fs -m 2 "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && { [[ $i -gt 20 ]] && echo; return 0; }
+    [[ $i -eq 20 ]] && printf '  first start can take a minute'
+    [[ $i -gt 20 && $((i % 4)) -eq 0 ]] && printf '.'
     sleep 0.5
   done
+  echo
   return 1
 }
 
@@ -222,7 +226,7 @@ public_ip() {
 print_urls() {
   local ip; ip="$(public_ip)"
   echo
-  echo "${bold}LLM GPU Calculator is running${reset}"
+  echo "${bold}AI Model → GPU Flavor Calculator is running${reset}"
   echo "  Local:   http://localhost:$PORT"
   if [[ -n "$ip" ]]; then
     echo "  Public:  ${bold}http://$ip:$PORT${reset}"

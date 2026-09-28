@@ -37,19 +37,33 @@ def _load_yaml(name: str, key: str) -> list[dict]:
 
 def seed(session: Session) -> None:
     """Add bundled catalog entries that are missing (by id). Never overwrites existing rows, so admin
-    edits survive upgrades while new models/GPUs shipped with a release still appear."""
-    for raw in _load_yaml("models.yaml", "models"):
-        if session.get(ModelRow, raw["id"]) is None:
-            upsert_model(session, ModelSpec.model_validate(raw), commit=False)
-    for raw in _load_yaml("gpus.yaml", "gpus"):
-        if session.get(GPURow, raw["id"]) is None:
-            upsert_gpu(session, GPUSpec.model_validate(raw), commit=False)
-    for raw in _load_yaml("vgpu_profiles.yaml", "vgpu_profiles"):
-        if session.get(VGPUProfileRow, raw["profile_name"]) is None:
-            upsert_profile(session, VGPUProfile.model_validate(raw), commit=False)
-    for raw in _load_yaml("ai_flavors.yaml", "ai_flavors"):
-        if session.get(AIFlavorRow, raw["id"]) is None:
-            upsert_flavor(session, AIFlavorDefinition.model_validate(raw), commit=False)
+    edits survive upgrades while new models/GPUs shipped with a release still appear.
+
+    Existing ids are read once per table and new rows are added in one transaction (a per-row lookup
+    auto-flushes and makes a fresh database slow to seed on slow disks)."""
+    with session.no_autoflush:
+        have = set(session.scalars(select(ModelRow.id)))
+        for raw in _load_yaml("models.yaml", "models"):
+            if raw["id"] not in have:
+                spec = ModelSpec.model_validate(raw)
+                session.add(ModelRow(id=spec.id, name=spec.name, family=spec.family, enabled=spec.enabled,
+                                     metadata_status=spec.metadata_status, spec=spec.model_dump(mode="json")))
+        have = set(session.scalars(select(GPURow.id)))
+        for raw in _load_yaml("gpus.yaml", "gpus"):
+            if raw["id"] not in have:
+                spec = GPUSpec.model_validate(raw)
+                session.add(GPURow(id=spec.id, enabled=spec.enabled, spec=spec.model_dump(mode="json")))
+        have = set(session.scalars(select(VGPUProfileRow.profile_name)))
+        for raw in _load_yaml("vgpu_profiles.yaml", "vgpu_profiles"):
+            if raw["profile_name"] not in have:
+                spec = VGPUProfile.model_validate(raw)
+                session.add(VGPUProfileRow(profile_name=spec.profile_name, physical_gpu=spec.physical_gpu,
+                                           enabled=spec.enabled, spec=spec.model_dump(mode="json")))
+        have = set(session.scalars(select(AIFlavorRow.id)))
+        for raw in _load_yaml("ai_flavors.yaml", "ai_flavors"):
+            if raw["id"] not in have:
+                spec = AIFlavorDefinition.model_validate(raw)
+                session.add(AIFlavorRow(id=spec.id, enabled=spec.enabled, spec=spec.model_dump(mode="json")))
     if session.scalar(select(InventoryRow.id).limit(1)) is None:
         for raw in _load_yaml("inventory.yaml", "inventory"):
             rec = InventoryRecord.model_validate(raw)

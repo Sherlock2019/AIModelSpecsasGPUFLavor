@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, create_engine
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 
@@ -23,8 +23,20 @@ DATABASE_URL = os.getenv("DATABASE_URL") or _default_url()
 
 
 def make_engine(url: str):
-    kwargs = {"connect_args": {"check_same_thread": False}} if url.startswith("sqlite") else {"pool_pre_ping": True}
-    return create_engine(url, **kwargs)
+    if not url.startswith("sqlite"):
+        return create_engine(url, pool_pre_ping=True)
+    eng = create_engine(url, connect_args={"check_same_thread": False})
+
+    @event.listens_for(eng, "connect")
+    def _sqlite_pragmas(dbapi_conn, _record):  # pragma: no cover - trivial
+        # WAL + NORMAL sync: far fewer fsyncs (first start on slow disks went from ~13 s to <1 s)
+        # and readers no longer block the writer.
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.close()
+
+    return eng
 
 
 engine = make_engine(DATABASE_URL)
