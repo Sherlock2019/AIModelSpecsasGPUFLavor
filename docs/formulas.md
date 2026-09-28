@@ -138,13 +138,14 @@ score = w_units × gpu_units                      (vGPU: 1/max_instances)
 ## 6. AI flavor
 
 ```
-Dense: AI-{size class}-{precision tag}-{tier}      e.g. AI-70B-Q4-PROD, ai.llm.70b.int4.prod
-MoE:   AI-MOE-{total}B-A{active}B-{tag}-{tier}     e.g. AI-MOE-30B-A3B-Q4-PROD
+AI-{tier}-{precision tag}-{variant}     e.g. AI-70B-Q4-PRO, ai.llm.70b.int4.pro, OpenStack ai-70b-q4-pro
+short name                              e.g. AI-70B-PRO (precision omitted when it is the tier baseline)
 ```
 
-- Size classes: 1B, 3B, 8B, 14B, 32B, 70B, 120B, 200B, 400B, XL.
-- Tier: SHARED (vGPU), DEV (development environment), PROD, PERFORMANCE or MAX.
-- User-defined models get a `CUSTOM-` prefix.
+- The tier comes from the AI flavor catalog: the smallest tier whose ceiling (+10% tolerance) covers the model's
+  *total* parameters, so MoE models count by total parameters. Beyond the largest tier the name is AI-XL.
+- Variant: SHARED (vGPU), PRO (one dedicated GPU) or MULTI (multi-GPU).
+- Custom ML workloads use `AI-CUSTOM-{INF|TRAIN|FT}-{memory}`. See [ai-flavors.md](ai-flavors.md) and [custom-ml.md](custom-ml.md).
 
 ## 7. Cost
 

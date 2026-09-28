@@ -218,13 +218,18 @@ export const PRIORITY_OPTIONS: { id: Priority; label: string; icon: LucideIcon; 
 
 export function PrioritySelect() {
   const { form, setWorkload } = useCalc()
-  const current = PRIORITY_OPTIONS.find((p) => p.id === form.workload.performance_priority)
+  return <PriorityPicker value={form.workload.performance_priority} onChange={(v) => setWorkload({ performance_priority: v })} />
+}
+
+/** State-agnostic priority selector (used by the LLM, AI flavor and custom ML pages). */
+export function PriorityPicker({ value, onChange }: { value: Priority; onChange: (v: Priority) => void }) {
+  const current = PRIORITY_OPTIONS.find((p) => p.id === value)
   return (
     <div>
       <Label id="priority-label">Performance priority</Label>
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="radiogroup" aria-labelledby="priority-label">
         {PRIORITY_OPTIONS.map((p) => {
-          const on = p.id === form.workload.performance_priority
+          const on = p.id === value
           const Icon = p.icon
           return (
             <button
@@ -232,7 +237,7 @@ export function PrioritySelect() {
               type="button"
               role="radio"
               aria-checked={on}
-              onClick={() => setWorkload({ performance_priority: p.id })}
+              onClick={() => onChange(p.id)}
               className={cx(
                 'flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-center text-xs font-semibold transition',
                 on ? 'border-brand bg-brand-soft text-brand-text ring-1 ring-brand' : 'border-line text-ink-2 hover:border-line-strong hover:text-ink',

@@ -48,7 +48,7 @@ export function modeLabel(c: Candidate): string {
 /** Reasons an option ranked below the recommendation (for "Why not …?"). */
 export function whyNot(alt: Candidate, rec: Candidate, unit: Unit): { ok: boolean; text: string }[] {
   const out: { ok: boolean; text: string }[] = []
-  if (alt.kind === 'vgpu') out.push({ ok: false, text: 'Shared GPU: performance is not guaranteed' })
+  if (alt.kind === 'vgpu' && rec.kind !== 'vgpu') out.push({ ok: false, text: 'Shared GPU: performance is not guaranteed' })
   if (alt.count > rec.count && alt.kind !== 'vgpu') {
     out.push({ ok: false, text: `Needs ${alt.count} GPUs and a model split` })
   }

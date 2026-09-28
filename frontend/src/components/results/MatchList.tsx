@@ -4,7 +4,7 @@ import { copyText } from '../../lib/download'
 import { fmtMem, fmtNum, type Unit } from '../../lib/format'
 import { candidateTitle, classLabel, memoryFit, modeLabel, performanceFit, type Tone } from '../../lib/plain'
 import { useCalc } from '../../state'
-import type { CalculationResult, Candidate, GPUSpec } from '../../types'
+import type { Candidate, GPUSpec, Priority } from '../../types'
 import { Badge, cx } from '../ui'
 
 const TONE_TEXT: Record<Tone, string> = {
@@ -39,9 +39,18 @@ function VendorBadge({ vendor }: { vendor: string }) {
   )
 }
 
-export function MatchList({ result, unit }: { result: CalculationResult; unit: Unit }) {
+export function MatchList({
+  matches,
+  priority,
+  flavor,
+  unit,
+}: {
+  matches: Candidate[]
+  priority: Priority
+  flavor?: string | null
+  unit: Unit
+}) {
   const [showAll, setShowAll] = useState(false)
-  const matches = result.matches
   if (!matches.length) {
     return (
       <div className="rounded-2xl border border-critical/40 bg-critical-soft p-5 text-sm text-critical-text">
@@ -73,7 +82,7 @@ export function MatchList({ result, unit }: { result: CalculationResult; unit: U
           Matching GPUs
         </h2>
         <span className="text-xs text-ink-3">
-          {matches.length} option{matches.length > 1 ? 's' : ''} · NVIDIA &amp; AMD · ranked for {result.workload.performance_priority === 'economy' ? 'lowest cost' : result.workload.performance_priority.replace('maximum', 'max performance')}
+          {matches.length} option{matches.length > 1 ? 's' : ''} · NVIDIA &amp; AMD · ranked for {priority === 'economy' ? 'lowest cost' : priority.replace('maximum', 'max performance')}
         </span>
       </div>
       <ol className="space-y-3">
@@ -81,7 +90,7 @@ export function MatchList({ result, unit }: { result: CalculationResult; unit: U
           const rank = matches.indexOf(c) + 1
           return (
             <li key={c.key}>
-              <GpuCard candidate={c} rank={rank} tag={tag} unit={unit} flavor={rank === 1 ? result.recommendation?.ai_flavor : undefined} />
+              <GpuCard candidate={c} rank={rank} tag={tag} unit={unit} flavor={rank === 1 ? (flavor ?? undefined) : undefined} />
             </li>
           )
         })}
@@ -250,7 +259,10 @@ function TechnicalDetails({ candidate: c, gpu, unit }: { candidate: Candidate; g
         <div className="mb-1 font-semibold text-ink">Calculation {c.count > 1 ? `(per GPU, tensor parallel = ${c.tensor_parallel})` : ''}</div>
         <dl className="divide-y divide-line">
           <Spec k="Model weights" v={fmtMem(m.model_weights_gb, unit)} />
-          <Spec k="KV cache" v={fmtMem(m.kv_cache_gb, unit)} />
+          {m.kv_cache_gb > 0 && <Spec k="KV cache" v={fmtMem(m.kv_cache_gb, unit)} />}
+          {m.activations_gb > 0 && <Spec k="Activations & I/O" v={fmtMem(m.activations_gb, unit)} />}
+          {m.gradients_gb > 0 && <Spec k="Gradients" v={fmtMem(m.gradients_gb, unit)} />}
+          {m.optimizer_gb > 0 && <Spec k="Optimizer states" v={fmtMem(m.optimizer_gb, unit)} />}
           <Spec k="Runtime + workspace" v={fmtMem(m.runtime_overhead_gb + m.workspace_gb, unit)} />
           {m.communication_gb > 0 && <Spec k="Communication buffers" v={fmtMem(m.communication_gb, unit)} />}
           <Spec k={`Safety margin (${m.safety_margin_percent}%)`} v={fmtMem(m.headroom_gb, unit)} />

@@ -7,6 +7,8 @@ precision:
   # quantization scales/zero-points, unquantized layers (embeddings, norms, lm_head) and
   # packing. `compute` names the GPU throughput column used for compute estimates.
   fp32:  {label: FP32,  bytes_per_parameter: 4.0,     default_overhead_factor: 1.00, flavor_tag: FP32,  compute: fp32}
+  # TF32 stores FP32 weights but runs matrix math on TF32 tensor cores (training).
+  tf32:  {label: TF32,  bytes_per_parameter: 4.0,     default_overhead_factor: 1.00, flavor_tag: TF32,  compute: tf32}
   fp16:  {label: FP16,  bytes_per_parameter: 2.0,     default_overhead_factor: 1.00, flavor_tag: FP16,  compute: fp16}
   bf16:  {label: BF16,  bytes_per_parameter: 2.0,     default_overhead_factor: 1.00, flavor_tag: BF16,  compute: bf16}
   fp8:   {label: FP8,   bytes_per_parameter: 1.0,     default_overhead_factor: 1.02, flavor_tag: FP8,   compute: fp8}
@@ -24,7 +26,7 @@ kv_precision:
 frameworks:
   vllm:         {label: vLLM,           base_overhead_gb: 1.5,  workspace_percent: 5,  communication_overhead_gb_per_gpu: 0.5}
   sglang:       {label: SGLang,         base_overhead_gb: 1.5,  workspace_percent: 5,  communication_overhead_gb_per_gpu: 0.5}
-  tensorrt_llm: {label: TensorRT-LLM,   base_overhead_gb: 2.0,  workspace_percent: 7,  communication_overhead_gb_per_gpu: 0.75}
+  tensorrt_llm: {label: TensorRT-LLM,   base_overhead_gb: 2.0,  workspace_percent: 7,  communication_overhead_gb_per_gpu: 0.75, nvidia_only: true}
   tgi:          {label: TGI,            base_overhead_gb: 1.5,  workspace_percent: 5,  communication_overhead_gb_per_gpu: 0.5}
   pytorch:      {label: PyTorch / HF Transformers, base_overhead_gb: 2.0, workspace_percent: 10, communication_overhead_gb_per_gpu: 1.0}
 
@@ -154,3 +156,7 @@ cost:
 
 ranking:
   use_inventory: true
+  exclude_insufficient_capacity: true
+
+# A model fits an AI flavor tier when total parameters <= ceiling x (1 + tolerance).
+flavor_tier_tolerance_percent: 10

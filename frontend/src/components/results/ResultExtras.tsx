@@ -5,7 +5,7 @@ import { fmtMem, type Unit } from '../../lib/format'
 import type { CalculateRequest, CalculationResult, SummaryRow } from '../../types'
 import { Alert, Badge, Button, Card, Spinner, Table } from '../ui'
 
-export function InfrastructureTab({ result }: { result: CalculationResult }) {
+export function InfrastructureTab({ result }: { result: Pick<CalculationResult, 'openstack' | 'openstack_yaml'> }) {
   const [copied, setCopied] = useState(false)
   if (!result.openstack_yaml) {
     return <Alert tone="warning">No configuration fits, so no OpenStack flavor can be generated.</Alert>
@@ -38,7 +38,7 @@ export function InfrastructureTab({ result }: { result: CalculationResult }) {
   )
 }
 
-export function TraceTab({ result }: { result: CalculationResult }) {
+export function TraceTab({ result }: { result: Pick<CalculationResult, 'trace'> }) {
   return (
     <div className="space-y-4">
       <Table>

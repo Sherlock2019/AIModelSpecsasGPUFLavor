@@ -66,7 +66,7 @@ export function GuidePage() {
         {EXAMPLES.map((ex) => (
           <Link
             key={ex.title}
-            to={`/?${toQuery(ex.model, { ...DEFAULT_WORKLOAD, ...ex.patch })}`}
+            to={`/calculator?${toQuery(ex.model, { ...DEFAULT_WORKLOAD, ...ex.patch })}`}
             className="group flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 transition hover:border-brand"
           >
             <span>

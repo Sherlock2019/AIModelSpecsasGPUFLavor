@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from ..schemas import (
+    AIFlavorDefinition,
     BenchmarkRecord,
     CalculateRequest,
     CalculationResult,
@@ -27,7 +28,7 @@ from . import compute as compute_mod
 from .config import EngineSettings
 from .flavor import ai_flavor
 from .memory import SizingError, kv_cache, per_gpu_breakdown, resolve_kv_precision, weight_memory
-from .openstack import openstack_flavor, to_yaml
+from .openstack import compile_openstack_flavor, deployment_spec, to_yaml
 from .selection import Capacity, SelectionContext, generate, pick_alternatives
 from .units import fmt_tokens, gb, gib, r
 
@@ -41,6 +42,8 @@ class Catalog:
     capacity: dict[str, Capacity] = field(default_factory=dict)
     has_inventory: bool = False
     benchmarks: list[BenchmarkRecord] = field(default_factory=list)
+    ai_flavors: list[AIFlavorDefinition] = field(default_factory=list)
+    forced_tier: Optional[AIFlavorDefinition] = None  # set by the AI flavor service only
 
 
 def _warn(out: list[Warning_], code: str, severity: str, message: str) -> None:
@@ -306,14 +309,17 @@ def _calculate(req: WorkloadInput, model: ModelSpec, catalog: Catalog, settings:
 
     # ------------------------------------------------------------------ recommendation
     recommendation = None
-    openstack = openstack_yaml = None
+    openstack = openstack_yaml = spec = None
     gpus_by_id = {g.id: g for g in catalog.gpus}
     profiles_by_name = {p.profile_name: p for p in catalog.profiles}
     if best is not None:
-        fl = ai_flavor(model, req.precision, best.kind, settings, priority, req.environment)
+        fl = ai_flavor(model, req.precision, best.kind, settings, catalog.ai_flavors, catalog.forced_tier)
         mode_label = {"vgpu": "vGPU", "full_gpu": "Dedicated GPU", "multi_gpu": "Multi-GPU (tensor parallel)"}[best.kind]
         recommendation = Recommendation(
             ai_flavor=fl.ai_flavor,
+            ai_flavor_short=fl.short_name,
+            flavor_variant=fl.variant,
+            flavor_tier_id=fl.tier_id,
             flavor_name=fl.flavor_name,
             gpu=best.gpu_name,
             gpu_id=best.gpu_id,
@@ -327,19 +333,48 @@ def _calculate(req: WorkloadInput, model: ModelSpec, catalog: Catalog, settings:
             summary=best.label if best.kind == "vgpu" else f"{best.label} — {mode_label}",
             candidate=best,
         )
-        openstack = openstack_flavor(
-            best,
-            fl.slug,
-            model,
-            gpus_by_id[best.gpu_id],
-            profiles_by_name.get(best.vgpu_profile) if best.vgpu_profile else None,
-            req.precision,
-            gb(w.bytes),
-            req.context_length,
-            req.concurrent_sequences,
-            req.framework,
-            req.performance_priority,
-            settings,
+        gpu = gpus_by_id[best.gpu_id]
+        profile = profiles_by_name.get(best.vgpu_profile) if best.vgpu_profile else None
+        model_block = {
+            "id": model.id,
+            "name": model.name,
+            "architecture": model.architecture,
+            "total_parameters_b": model.total_parameters_b,
+            "active_parameters_b": model.active_parameters_b,
+            "precision": req.precision,
+            "context": req.context_length,
+        }
+        spec = deployment_spec(
+            candidate=best,
+            gpu=gpu,
+            profile=profile,
+            ai_flavor=fl.ai_flavor,
+            display_name=fl.short_name,
+            slug=fl.slug,
+            workload_type="llm",
+            model=model_block,
+            workload={
+                "task": "inference",
+                "framework": req.framework,
+                "concurrency": req.concurrent_sequences,
+                "performance_priority": req.performance_priority,
+            },
+            weights_gb=gb(w.bytes),
+            required_vram_gb=gb(base.required),
+            settings=settings,
+            gpu_requirement={
+                "minimum_vram_gb": r(gb(base.required), 1),
+                "compute_class": cprof.classification,
+                "bandwidth_class": cprof.bandwidth_class,
+                "gpu_count": best.count,
+                "mode": best.kind,
+            },
+        )
+        openstack = compile_openstack_flavor(
+            spec,
+            pci_alias=gpu.openstack_pci_alias,
+            vgpu_trait=profile.openstack_trait if profile else None,
+            performance=req.performance_priority in ("performance", "maximum"),
         )
         openstack_yaml = to_yaml(openstack)
 
@@ -413,6 +448,7 @@ def _calculate(req: WorkloadInput, model: ModelSpec, catalog: Catalog, settings:
         vgpu_verdict=vgpu_verdict,
         warnings=warnings,
         explanation=explanation,
+        deployment_spec=spec,
         openstack=openstack,
         openstack_yaml=openstack_yaml,
         trace=trace,
@@ -441,6 +477,12 @@ def _vgpu_verdict(req: WorkloadInput, priority_label: str, best, sel, required_g
         return (
             f"Possible ({fitting_vgpu[0].label}), but a dedicated option ranked higher for "
             f"{priority_label} priority."
+        )
+    if sel.vgpu_capacity_blocked:
+        c = sel.vgpu_capacity_blocked[0]
+        return (
+            f"Suitable vGPU profile currently unavailable ({c.vgpu_profile} on {c.gpu_name} has no free instances), "
+            "so a dedicated option is recommended."
         )
     if sel.vgpu_too_small:
         largest = max(sel.vgpu_too_small, key=lambda c: c.vram_per_unit_gb)

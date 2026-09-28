@@ -30,6 +30,7 @@ class FrameworkConfig(BaseModel):
     base_overhead_gb: float = Field(ge=0)
     workspace_percent: float = Field(ge=0, le=100)
     communication_overhead_gb_per_gpu: float = Field(default=0.5, ge=0)
+    nvidia_only: bool = False  # e.g. TensorRT / TensorRT-LLM
 
 
 class EnvironmentConfig(BaseModel):
@@ -103,6 +104,82 @@ class CostConfig(BaseModel):
 
 class RankingConfig(BaseModel):
     use_inventory: bool = True
+    # Skip options whose capacity is known to be short right now (vGPU profile with 0 free
+    # instances, or fewer free GPUs than needed) and say why, instead of recommending them.
+    exclude_insufficient_capacity: bool = True
+
+
+class OptimizerConfig(BaseModel):
+    label: str
+    states: float = 2  # optimizer state tensors per parameter (Adam m and v = 2)
+    bytes_per_param: Optional[float] = None  # fixed estimate instead of states x optimizer precision
+
+
+def _ml_frameworks() -> dict[str, FrameworkConfig]:
+    return {
+        "pytorch": FrameworkConfig(label="PyTorch", base_overhead_gb=1.5, workspace_percent=10, communication_overhead_gb_per_gpu=1.0),
+        "tensorflow": FrameworkConfig(label="TensorFlow", base_overhead_gb=2.0, workspace_percent=10, communication_overhead_gb_per_gpu=1.0),
+        "jax": FrameworkConfig(label="JAX", base_overhead_gb=1.5, workspace_percent=10, communication_overhead_gb_per_gpu=1.0),
+        "onnxruntime": FrameworkConfig(label="ONNX Runtime", base_overhead_gb=1.0, workspace_percent=5, communication_overhead_gb_per_gpu=0.5),
+        "tensorrt": FrameworkConfig(label="TensorRT", base_overhead_gb=1.0, workspace_percent=5, communication_overhead_gb_per_gpu=0.5, nvidia_only=True),
+        "other": FrameworkConfig(label="Other", base_overhead_gb=2.0, workspace_percent=10, communication_overhead_gb_per_gpu=1.0),
+    }
+
+
+def _optimizers() -> dict[str, OptimizerConfig]:
+    return {
+        "adamw": OptimizerConfig(label="AdamW", states=2),
+        "adam": OptimizerConfig(label="Adam", states=2),
+        "sgd": OptimizerConfig(label="SGD (momentum)", states=1),
+        "adafactor": OptimizerConfig(label="Adafactor", states=0, bytes_per_param=0.5),
+        "other": OptimizerConfig(label="Other", states=2),
+    }
+
+
+class ActivationHeuristics(BaseModel):
+    """Coefficients for ESTIMATED activation memory (never presented as exact).
+
+    Transformer-style estimate per sample: tokens x hidden x layers x coefficient x (bytes/2), after
+    Korthikanti et al. 2022 (~34 bytes per token per hidden unit per layer for 16-bit training
+    without recomputation). Hidden size / layers are derived from the parameter count when unknown
+    (params ~= 12 x layers x hidden^2 with hidden ~= hidden_per_layer x layers).
+    """
+
+    inference_bytes_per_token_hidden: float = 16  # live tensors of one layer at a time
+    training_bytes_per_token_hidden_layer: float = 34
+    checkpointed_bytes_per_token_hidden_layer: float = 2  # only layer inputs kept
+    spatial_channels_inference: float = 64  # early conv feature maps at input resolution
+    spatial_channels_training: float = 256
+    hidden_per_layer: float = 80
+    patch_size: int = 16
+    audio_tokens_per_second: float = 50
+    diffusion_latent_downsample: int = 8
+    diffusion_patch: int = 2
+    vae_decoder_channels: float = 128
+
+
+class MLConfig(BaseModel):
+    frameworks: dict[str, FrameworkConfig] = Field(default_factory=_ml_frameworks)
+    optimizers: dict[str, OptimizerConfig] = Field(default_factory=_optimizers)
+    activation: ActivationHeuristics = Field(default_factory=ActivationHeuristics)
+    # Inference: requests are expected to finish within this latency (sets the compute target).
+    latency_target_ms: dict[str, float] = Field(
+        default_factory=lambda: {"economy": 1000, "balanced": 500, "performance": 200, "maximum": 100}
+    )
+    # Training: optimizer steps per second targeted when no throughput is given.
+    training_steps_per_second: dict[str, float] = Field(
+        default_factory=lambda: {"economy": 0.1, "balanced": 0.25, "performance": 0.5, "maximum": 1}
+    )
+    compute_classes: list[Threshold] = Field(  # required TFLOPS
+        default_factory=lambda: [
+            Threshold(name="low", max=5),
+            Threshold(name="medium", max=50),
+            Threshold(name="high", max=200),
+            Threshold(name="very_high", max=800),
+            Threshold(name="extreme", max=None),
+        ]
+    )
+    default_adapter_percent: float = 0.5  # LoRA trainable parameters as % of the base model
 
 
 class EngineSettings(BaseModel):
@@ -144,10 +221,12 @@ class EngineSettings(BaseModel):
     )
     gpu_counts: list[int] = Field(default_factory=lambda: [1, 2, 4, 8, 16])
     gpus_per_node: int = 8
-    flavor_size_classes: list[FlavorSizeClass]
+    flavor_size_classes: list[FlavorSizeClass]  # fallback naming when no AI flavor catalog is loaded
+    flavor_tier_tolerance_percent: float = Field(default=10, ge=0, le=50)
     openstack: OpenStackConfig = Field(default_factory=OpenStackConfig)
     cost: CostConfig = Field(default_factory=CostConfig)
     ranking: RankingConfig = Field(default_factory=RankingConfig)
+    ml: MLConfig = Field(default_factory=MLConfig)
 
 
 def load_default_settings_dict() -> dict:

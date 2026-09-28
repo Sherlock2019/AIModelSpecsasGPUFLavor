@@ -73,6 +73,8 @@ export interface VGPUProfile {
   supports_cuda: boolean
   license_required: boolean
   license_cost_per_hour?: number | null
+  available_instances?: number | null
+  openstack_trait?: string | null
   source_url?: string | null
   metadata_status: MetadataStatus
   notes?: string | null
@@ -123,6 +125,7 @@ export interface WorkloadInput {
   average_output_tokens?: number | null
   kv_cache_precision: string
   allow_vgpu: boolean
+  allow_single_gpu?: boolean
   allow_multi_gpu: boolean
   prefer_lowest_cost: boolean
   add_safety_headroom: boolean
@@ -155,6 +158,9 @@ export interface MemoryBreakdown {
   headroom_gb: number
   required_vram_gb: number
   safety_margin_percent: number
+  activations_gb: number
+  gradients_gb: number
+  optimizer_gb: number
 }
 
 export interface CostEstimate {
@@ -209,12 +215,16 @@ export interface Candidate {
   benchmark?: BenchmarkMatch | null
   notes: string[]
   rejected_reason?: string | null
+  capacity_limited?: boolean
   score?: number | null
   label: string
 }
 
 export interface Recommendation {
   ai_flavor: string
+  ai_flavor_short: string
+  flavor_variant: string
+  flavor_tier_id?: string | null
   flavor_name: string
   gpu: string
   gpu_id: string
@@ -311,17 +321,198 @@ export interface CalculationResult {
   vgpu_verdict: string
   warnings: CalcWarning[]
   explanation: string[]
+  deployment_spec?: DeploymentSpec | null
   openstack?: Record<string, unknown> | null
   openstack_yaml?: string | null
   trace: { step: string; formula: string; value: string }[]
   suggestions: Suggestion[]
 }
 
+export type DeploymentSpec = Record<string, unknown> & {
+  workload_type: string
+  ai_flavor: string
+  display_name: string
+  flavor_slug: string
+  vm: { vcpus: number; ram_gb: number; disk_gb: number }
+  gpu: Record<string, unknown> & { mode: string; count: number; physical_gpu: string; minimum_vram_gb: number; vgpu_profile?: string }
+}
+
+export interface DeploymentSpecRecord {
+  id: number
+  name?: string | null
+  created_at: string
+  workload_type: string
+  ai_flavor: string
+  spec: DeploymentSpec
+  openstack: Record<string, unknown> & { name: string; requires_configuration: string[] }
+}
+
+// --------------------------------------------------------------------------- AI VM flavors
+
+export interface AIFlavor {
+  id: string
+  display_name: string
+  description: string
+  group: 'small' | 'medium' | 'large' | 'ultra'
+  parameter_floor_b: number
+  parameter_ceiling_b: number
+  baseline_precision: string
+  default_vram_min_gb: number
+  default_vram_max_gb: number
+  recommended_use_cases: string[]
+  example_model_ids: string[]
+  allow_vgpu: boolean
+  allow_full_gpu: boolean
+  allow_multi_gpu: boolean
+  performance_tier: string
+  default_context_length: number
+  default_concurrency: number
+  default_performance_priority: Priority
+  commercial_sku?: string | null
+  enabled: boolean
+  model_ids?: string[]
+}
+
+export interface FlavorRef {
+  id: string
+  display_name: string
+}
+
+export interface FlavorSizeResult {
+  requested_flavor?: FlavorRef | null
+  model_flavor?: FlavorRef | null
+  recommended_tier?: FlavorRef | null
+  tier_status: 'fits' | 'exceeds' | 'oversized' | 'no_tier' | 'model_tier'
+  tier_message?: string | null
+  recommended_flavor?: string | null
+  display_flavor?: string | null
+  variant?: string | null
+  mode_label?: string | null
+  allocated_gpu_memory_gb?: number | null
+  vram_range_note?: string | null
+  sizing: Record<string, unknown>
+  calculation: CalculationResult
+}
+
+// --------------------------------------------------------------------------- custom ML
+
+export type MLTask = 'inference' | 'training' | 'fine_tuning'
+
+export interface MLSizingRequest {
+  model_name: string
+  model_category: string
+  task: MLTask
+  fine_tune_method: 'full' | 'lora' | 'qlora'
+  framework: string
+  parameters_m: number
+  model_file_size_gb?: number | null
+  precision: string
+  batch_size: number
+  concurrent_requests: number
+  performance_priority: Priority
+  target_latency_ms?: number | null
+  target_throughput?: number | null
+  image_width?: number | null
+  image_height?: number | null
+  channels?: number
+  frames_per_sample?: number | null
+  audio_seconds?: number | null
+  sample_rate_hz?: number | null
+  sequence_length?: number | null
+  diffusion_steps?: number | null
+  num_detections?: number | null
+  input_elements?: number | null
+  output_elements?: number | null
+  num_layers?: number | null
+  hidden_size?: number | null
+  uses_kv_cache?: boolean
+  activation_memory_gb?: number | null
+  gradient_checkpointing?: boolean
+  optimizer?: string
+  optimizer_bytes_per_param?: number | null
+  optimizer_precision?: string
+  master_weights?: boolean
+  training_precision?: string | null
+  gradient_precision?: string | null
+  adapter_percent?: number | null
+  data_parallel_size?: number
+  tensor_parallel_size?: number | null
+  pipeline_parallel_size?: number
+  model_growth_percent?: number
+  safety_margin_percent?: number | null
+  allow_vgpu?: boolean
+  allow_multi_gpu?: boolean
+  max_gpu_count?: number
+}
+
+export interface MLMeta {
+  categories: { id: string; label: string; input_kind: string; defaults: Record<string, number> }[]
+  frameworks: { id: string; label: string; nvidia_only: boolean }[]
+  optimizers: { id: string; label: string }[]
+  precisions: { id: string; label: string; bytes_per_parameter: number }[]
+  default_adapter_percent: number
+}
+
+export interface MLSizingResult {
+  workload_type: 'custom_ml'
+  calculation_mode: 'estimate' | 'benchmark'
+  confidence_label: 'ESTIMATED' | 'BENCHMARK-BASED'
+  activation_method: 'estimated' | 'manual'
+  model: {
+    name: string
+    category: string
+    category_label: string
+    task: MLTask
+    fine_tune_method?: string | null
+    parameters_b: number
+    trainable_parameters_b: number
+    precision: string
+    compute_precision: string
+    framework: string
+  }
+  workload: {
+    batch_size: number
+    micro_batch_per_gpu: number
+    concurrent_requests: number
+    in_flight_samples: number
+    input_description: string
+    effective_tokens_per_sample: number
+    performance_priority: Priority
+    data_parallel_size: number
+    samples_per_second: number
+    safety_margin_percent: number
+  }
+  memory: MemoryBreakdown
+  memory_gib: MemoryBreakdown
+  compute: {
+    classification: string
+    bandwidth_class: string
+    memory_intensity: string
+    required_tflops: number
+    required_bandwidth_gbps: number
+    gflops_per_sample: number
+    samples_per_second: number
+  }
+  requirement: { gpu_count_label: string; total_gpus: number; mode: string; interconnect: 'Not required' | 'Recommended' | 'Required' }
+  recommendation?: Recommendation | null
+  ai_flavor_display?: string | null
+  matches: Candidate[]
+  rejected: Candidate[]
+  vgpu_verdict: string
+  warnings: CalcWarning[]
+  explanation: string[]
+  suggestions: Suggestion[]
+  deployment_spec?: DeploymentSpec | null
+  openstack?: Record<string, unknown> | null
+  openstack_yaml?: string | null
+  trace: { step: string; formula: string; value: string }[]
+}
+
 export interface Suggestion {
   key: string
   title: string
   tradeoff: string
-  patch: Partial<WorkloadInput>
+  patch: Record<string, unknown>
   required_vram_gb: number
   recommendation: string
   ai_flavor: string

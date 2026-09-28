@@ -216,8 +216,11 @@ function GpuEditor({ initial, isNew, onClose, onSaved }: { initial: GPUSpec; isN
             ))}
           </Select>
         </Field>
-        <Field label="OpenStack PCI alias">
+        <Field label="OpenStack PCI alias" hint="Must match [pci] alias in nova.conf">
           <Input value={g.openstack_pci_alias ?? ''} onChange={(e) => set({ openstack_pci_alias: e.target.value || null })} />
+        </Field>
+        <Field label="GPU link">
+          <Input value={g.interconnect_type ?? ''} placeholder="PCIe, NVLink, Infinity Fabric…" onChange={(e) => set({ interconnect_type: e.target.value || null })} />
         </Field>
       </div>
       <div className="mt-3">
@@ -265,6 +268,8 @@ function ProfileTable({ profiles, gpus, onChanged }: { profiles: VGPUProfile[]; 
             <th className="text-right">Max / GPU</th>
             <th>Sharing</th>
             <th className="text-right">License $/h</th>
+            <th className="text-right">Free</th>
+            <th>OpenStack trait</th>
             <th>Status</th>
             <th />
           </tr>
@@ -278,6 +283,10 @@ function ProfileTable({ profiles, gpus, onChanged }: { profiles: VGPUProfile[]; 
               <td className="text-right">{p.max_instances_per_gpu}</td>
               <td>{p.sharing_mode === 'mig' ? <Badge tone="brand">MIG {p.mig_compute_slices}/7</Badge> : 'Time-sliced'}</td>
               <td className="text-right">{p.license_cost_per_hour ?? '—'}</td>
+              <td className="text-right">
+                {p.available_instances == null ? <span className="text-ink-3">?</span> : p.available_instances === 0 ? <Badge tone="critical">0</Badge> : p.available_instances}
+              </td>
+              <td className="font-mono text-xs">{p.openstack_trait ?? <span className="text-ink-3">not set</span>}</td>
               <td>
                 <StatusBadge status={p.metadata_status} />
               </td>
@@ -365,6 +374,12 @@ function ProfileEditor({ initial, gpus, onClose, onSaved }: { initial: VGPUProfi
         </Field>
         <Field label="License cost per hour ($)">
           <NumberInput min={0} step="any" value={p.license_cost_per_hour} onChange={(v) => set({ license_cost_per_hour: v })} />
+        </Field>
+        <Field label="Free instances now" hint="Empty = unknown. 0 = exhausted (skipped with a reason)">
+          <NumberInput min={0} value={p.available_instances} onChange={(v) => set({ available_instances: v })} />
+        </Field>
+        <Field label="OpenStack Placement trait" hint="e.g. CUSTOM_VGPU_L40S_24C (from your cloud config)" className="col-span-2">
+          <Input value={p.openstack_trait ?? ''} onChange={(e) => set({ openstack_trait: e.target.value || null })} />
         </Field>
       </div>
       <div className="mt-3">

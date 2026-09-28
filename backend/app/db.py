@@ -7,6 +7,7 @@ import os
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from sqlalchemy import JSON, Boolean, DateTime, Integer, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -90,6 +91,25 @@ class SavedCalculationRow(Base):
     name: Mapped[str] = mapped_column(String(200))
     request: Mapped[dict] = mapped_column(JSON)
     result: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AIFlavorRow(Base):
+    __tablename__ = "ai_flavors"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    spec: Mapped[dict] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class DeploymentSpecRow(Base):
+    __tablename__ = "deployment_specs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    workload_type: Mapped[str] = mapped_column(String(40))
+    ai_flavor: Mapped[str] = mapped_column(String(100))
+    spec: Mapped[dict] = mapped_column(JSON)
+    openstack: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

@@ -144,10 +144,22 @@ class Breakdown:
     workspace: float
     communication: float
     safety_margin_percent: float
+    activations: float = 0.0
+    gradients: float = 0.0
+    optimizer: float = 0.0
 
     @property
     def subtotal(self) -> float:
-        return self.weights + self.kv + self.runtime + self.workspace + self.communication
+        return (
+            self.weights
+            + self.kv
+            + self.activations
+            + self.gradients
+            + self.optimizer
+            + self.runtime
+            + self.workspace
+            + self.communication
+        )
 
     @property
     def headroom(self) -> float:
@@ -169,6 +181,9 @@ class Breakdown:
             headroom_gb=r(conv(self.headroom)),
             required_vram_gb=r(conv(self.required)),
             safety_margin_percent=r(self.safety_margin_percent, 1),
+            activations_gb=r(conv(self.activations)),
+            gradients_gb=r(conv(self.gradients)),
+            optimizer_gb=r(conv(self.optimizer)),
         )
 
 

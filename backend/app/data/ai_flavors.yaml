@@ -1,0 +1,173 @@
+# Customer-facing AI VM flavor tiers (product catalog).
+#
+# These are DEFAULT PRODUCT TIERS, not infrastructure requirements. The VRAM ranges assume
+# roughly INT4/Q4 inference and are catalog guidance only - the sizing engine recalculates the
+# real requirement from parameters, precision, context, concurrency, KV cache, runtime,
+# workspace and safety margin, then matches vGPU / full GPU / multi-GPU infrastructure.
+#
+# A model belongs to the smallest enabled tier whose parameter_ceiling_b (plus the configurable
+# tolerance, default 10%, so "14B" models of 14.8B still count) covers its total parameters.
+# allow_vgpu / allow_full_gpu / allow_multi_gpu are product policy applied to the sizing request.
+
+ai_flavors:
+  - id: ai-1b
+    display_name: AI-1B
+    description: Micro AI VM
+    group: small
+    parameter_floor_b: 0
+    parameter_ceiling_b: 1.5   # "1B class" includes 1.24B models such as Llama 3.2 1B
+    baseline_precision: int4
+    default_vram_min_gb: 2
+    default_vram_max_gb: 4
+    recommended_use_cases: [Classification, Extraction, Routing]
+    example_model_ids: [llama-3.2-1b-instruct, qwen3-0.6b, gemma-3-1b-it]
+    allow_vgpu: true
+    allow_full_gpu: true
+    allow_multi_gpu: false
+    performance_tier: entry
+    default_context_length: 8192
+    default_concurrency: 10
+
+  - id: ai-3b
+    display_name: AI-3B
+    description: Compact AI VM
+    group: small
+    parameter_floor_b: 1.5
+    parameter_ceiling_b: 3
+    baseline_precision: int4
+    default_vram_min_gb: 4
+    default_vram_max_gb: 8
+    recommended_use_cases: [Summaries, Tagging, Edge assistants]
+    example_model_ids: [llama-3.2-3b-instruct, qwen3-1.7b, gemma-2-2b-it]
+    allow_vgpu: true
+    allow_full_gpu: true
+    allow_multi_gpu: false
+    performance_tier: entry
+    default_context_length: 8192
+    default_concurrency: 10
+
+  - id: ai-8b
+    display_name: AI-8B
+    description: Small AI VM
+    group: small
+    parameter_floor_b: 3
+    parameter_ceiling_b: 8
+    baseline_precision: int4
+    default_vram_min_gb: 8
+    default_vram_max_gb: 16
+    recommended_use_cases: [Chatbots, RAG, Assistants]
+    example_model_ids: [llama-3.1-8b-instruct, mistral-7b-instruct-v0.3, qwen3-8b, qwen2.5-7b-instruct]
+    allow_vgpu: true
+    allow_full_gpu: true
+    allow_multi_gpu: false
+    performance_tier: standard
+    default_context_length: 16384
+    default_concurrency: 5
+
+  - id: ai-14b
+    display_name: AI-14B
+    description: Medium AI VM
+    group: medium
+    parameter_floor_b: 8
+    parameter_ceiling_b: 14
+    baseline_precision: int4
+    default_vram_min_gb: 16
+    default_vram_max_gb: 24
+    recommended_use_cases: [RAG, Coding help, Reasoning]
+    example_model_ids: [qwen3-14b, phi-4, deepseek-r1-distill-qwen-14b, gemma-3-12b-it]
+    allow_vgpu: true
+    allow_full_gpu: true
+    allow_multi_gpu: false
+    performance_tier: standard
+    default_context_length: 32768
+    default_concurrency: 20
+
+  - id: ai-32b
+    display_name: AI-32B
+    description: Advanced AI VM
+    group: medium
+    parameter_floor_b: 14
+    parameter_ceiling_b: 32
+    baseline_precision: int4
+    default_vram_min_gb: 24
+    default_vram_max_gb: 48
+    recommended_use_cases: [Enterprise RAG, Coding, Agents]
+    example_model_ids: [qwen3-32b, qwen2.5-32b-instruct, gemma-3-27b-it, qwen3-30b-a3b, deepseek-r1-distill-qwen-32b]
+    allow_vgpu: true
+    allow_full_gpu: true
+    allow_multi_gpu: false
+    performance_tier: pro
+    default_context_length: 32768
+    default_concurrency: 20
+
+  - id: ai-70b
+    display_name: AI-70B
+    description: Enterprise AI VM
+    group: large
+    parameter_floor_b: 32
+    parameter_ceiling_b: 70
+    baseline_precision: int4
+    default_vram_min_gb: 48
+    default_vram_max_gb: 80
+    recommended_use_cases: [Enterprise assistants, Complex reasoning, Multilingual]
+    example_model_ids: [llama-3.3-70b-instruct, qwen2.5-72b-instruct, deepseek-r1-distill-llama-70b, mixtral-8x7b-instruct-v0.1]
+    allow_vgpu: true
+    allow_full_gpu: true
+    allow_multi_gpu: true
+    performance_tier: pro
+    default_context_length: 32768
+    default_concurrency: 20
+
+  - id: ai-120b
+    display_name: AI-120B
+    description: Large AI VM
+    group: large
+    parameter_floor_b: 70
+    parameter_ceiling_b: 120
+    baseline_precision: int4
+    default_vram_min_gb: 80
+    default_vram_max_gb: 120
+    recommended_use_cases: [Frontier-class assistants, Agents, Long documents]
+    example_model_ids: [gpt-oss-120b, mistral-large-2-123b, llama-4-scout-17b-16e-instruct, glm-4.5-air]
+    allow_vgpu: false
+    allow_full_gpu: true
+    allow_multi_gpu: true
+    performance_tier: pro
+    default_context_length: 32768
+    default_concurrency: 16
+
+  - id: ai-200b
+    display_name: AI-200B
+    description: Ultra AI VM
+    group: ultra
+    parameter_floor_b: 120
+    parameter_ceiling_b: 200
+    baseline_precision: int4
+    default_vram_min_gb: 120
+    default_vram_max_gb: 160
+    recommended_use_cases: [Frontier reasoning, Research, Large MoE]
+    example_model_ids: [mixtral-8x22b-instruct-v0.1]
+    allow_vgpu: false
+    allow_full_gpu: true
+    allow_multi_gpu: true
+    performance_tier: ultra
+    default_context_length: 32768
+    default_concurrency: 16
+
+  - id: ai-400b
+    display_name: AI-400B
+    description: Ultra AI VM (multi-GPU)
+    group: ultra
+    parameter_floor_b: 200
+    parameter_ceiling_b: 400
+    baseline_precision: int4
+    default_vram_min_gb: 240
+    default_vram_max_gb: 320
+    recommended_use_cases: [Frontier models, Research, Large MoE]
+    example_model_ids: [llama-3.1-405b-instruct, llama-4-maverick-17b-128e-instruct, glm-4.5, qwen3-235b-a22b]
+    allow_vgpu: false
+    allow_full_gpu: false
+    allow_multi_gpu: true
+    performance_tier: ultra
+    default_context_length: 32768
+    default_concurrency: 8

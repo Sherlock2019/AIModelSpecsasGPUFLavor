@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -18,7 +19,7 @@ from ..schemas import (
 )
 from .compute import Demand, gpu_tensor_tflops
 from .config import EngineSettings, FrameworkConfig, PrecisionConfig, PriorityConfig, classify
-from .memory import KVCache, per_gpu_breakdown
+from .memory import Breakdown, KVCache, per_gpu_breakdown
 from .units import GB, gb, r
 
 # Ranking penalty per availability status (multiplied by the priority's availability weight).
@@ -57,6 +58,10 @@ class SelectionContext:
     has_inventory: bool
     benchmarks: list[BenchmarkRecord] = field(default_factory=list)
     use_benchmarks: bool = True
+    # Per-GPU memory for a split across `count` GPUs. None = LLM inference breakdown (weights + KV).
+    # Other workloads (custom ML inference/training) plug in their own breakdown here so every
+    # workload shares the same matcher.
+    memory_fn: Optional[Callable[[int], Breakdown]] = None
 
 
 @dataclass
@@ -65,6 +70,7 @@ class SelectionResult:
     rejected: list[Candidate]
     vgpu_policy_blocked: list[str]
     vgpu_too_small: list[Candidate]
+    vgpu_capacity_blocked: list[Candidate] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- evaluation
@@ -88,6 +94,11 @@ def _find_benchmark(ctx: SelectionContext, gpu_id: str, count: int) -> Optional[
         )
     )
     return rows[0]
+
+
+def _nvidia_only(ctx: SelectionContext) -> bool:
+    # The id check keeps databases seeded before the nvidia_only flag existed correct.
+    return ctx.framework.nvidia_only or ctx.req.framework == "tensorrt_llm"
 
 
 def _availability(ctx: SelectionContext, gpu: GPUSpec, units_needed: int) -> tuple[str, Optional[int]]:
@@ -114,15 +125,18 @@ def evaluate(ctx: SelectionContext, gpu: GPUSpec, count: int, profile: Optional[
     s = ctx.settings
     req = ctx.req
     notes: list[str] = []
-    bd = per_gpu_breakdown(
-        ctx.weights_bytes,
-        ctx.kv,
-        count,
-        ctx.framework,
-        ctx.safety_pct,
-        req.runtime_overhead_override_gb,
-        req.workspace_percent_override,
-    )
+    if ctx.memory_fn is not None:
+        bd = ctx.memory_fn(count)
+    else:
+        bd = per_gpu_breakdown(
+            ctx.weights_bytes,
+            ctx.kv,
+            count,
+            ctx.framework,
+            ctx.safety_pct,
+            req.runtime_overhead_override_gb,
+            req.workspace_percent_override,
+        )
     usable = profile.usable_vram_bytes if profile else gpu.usable_vram_bytes
     fraction = profile.compute_fraction(s.efficiency.mig_total_slices) if profile else 1.0
     fits = bd.required <= usable
@@ -163,8 +177,8 @@ def evaluate(ctx: SelectionContext, gpu: GPUSpec, count: int, profile: Optional[
             )
         if not gpu.has_high_speed_link:
             notes.append("No high-speed GPU link (NVLink / Infinity Fabric): the model split runs over PCIe, reducing throughput.")
-    if req.framework == "tensorrt_llm" and gpu.vendor.upper() != "NVIDIA":
-        rejected = "TensorRT-LLM runs only on NVIDIA GPUs"
+    if _nvidia_only(ctx) and gpu.vendor.upper() != "NVIDIA":
+        rejected = f"{ctx.framework.label} runs only on NVIDIA GPUs"
     if ctx.kv.shard_limit is not None and ctx.kv.method == "exact" and count > ctx.kv.shard_limit:
         notes.append(f"Only {ctx.kv.shard_limit} KV heads: KV cache is replicated beyond {ctx.kv.shard_limit}-way TP.")
     if profile:
@@ -210,7 +224,8 @@ def evaluate(ctx: SelectionContext, gpu: GPUSpec, count: int, profile: Optional[
         need, have = gb(bd.required), gb(usable)
         if fits_weights:
             rejected = (
-                f"Weights fit, but not after KV cache and overhead: needs {need:.1f} GB per GPU, "
+                f"Weights fit, but not the full workload ({'activations, training state' if ctx.memory_fn else 'KV cache'} "
+                f"and runtime): needs {need:.1f} GB per GPU, "
                 f"{have:.1f} GB usable"
             )
         else:
@@ -220,6 +235,16 @@ def evaluate(ctx: SelectionContext, gpu: GPUSpec, count: int, profile: Optional[
 
     units_needed = 1 if profile else count
     availability, available_units = _availability(ctx, gpu, units_needed)
+    if profile is not None and profile.available_instances is not None:
+        available_units = profile.available_instances
+        availability = "available" if profile.available_instances >= 1 else "insufficient"
+    capacity_limited = False
+    if s.ranking.exclude_insufficient_capacity and availability == "insufficient" and rejected is None:
+        capacity_limited = True
+        if profile is not None:
+            rejected = f"Suitable vGPU profile currently unavailable ({available_units or 0} free {profile.profile_name})"
+        else:
+            rejected = f"Capacity: only {available_units or 0} of {units_needed} GPU{'s' if units_needed > 1 else ''} available"
 
     cost = None
     if gpu.cost_per_hour is not None:
@@ -278,6 +303,7 @@ def evaluate(ctx: SelectionContext, gpu: GPUSpec, count: int, profile: Optional[
         benchmark=bench_match,
         notes=notes,
         rejected_reason=rejected,
+        capacity_limited=capacity_limited,
         label=_label(gpu, count, profile, tp),
     )
 
@@ -291,6 +317,7 @@ def generate(ctx: SelectionContext) -> SelectionResult:
     rejected: list[Candidate] = []
     policy_blocked: list[str] = []
     too_small: list[Candidate] = []
+    capacity_blocked: list[Candidate] = []
 
     gpus = [g for g in ctx.gpus if g.enabled and (not req.allowed_gpu_ids or g.id in req.allowed_gpu_ids)]
 
@@ -316,9 +343,12 @@ def generate(ctx: SelectionContext) -> SelectionResult:
                     if c.fits:
                         chosen = c
                         break
+                    if c.capacity_limited:  # would fit, but none free: record why, try the next profile
+                        rejected.append(c)
+                        capacity_blocked.append(c)
                 if chosen:
                     fitting.append(chosen)
-                else:
+                elif not any(c.gpu_id == gpu.id for c in capacity_blocked):
                     largest = evaluate(ctx, gpu, 1, mode_profiles[-1])
                     rejected.append(largest)
                     too_small.append(largest)
@@ -327,10 +357,12 @@ def generate(ctx: SelectionContext) -> SelectionResult:
     counts = [c for c in s.gpu_counts if c <= req.max_gpu_count]
     if not req.allow_multi_gpu:
         counts = [1]
+    if not req.allow_single_gpu:
+        counts = [c for c in counts if c > 1]
     if req.tensor_parallel_size:
         counts = [req.tensor_parallel_size]
     for gpu in gpus:
-        if req.framework == "tensorrt_llm" and gpu.vendor.upper() != "NVIDIA":
+        if _nvidia_only(ctx) and gpu.vendor.upper() != "NVIDIA":
             rejected.append(evaluate(ctx, gpu, 1))  # framework incompatibility, not a memory question
             continue
         first_fit = last = single = None
@@ -343,8 +375,10 @@ def generate(ctx: SelectionContext) -> SelectionResult:
                 first_fit = c
                 break
         if first_fit is None:
+            if single is not None and single is not last and single.capacity_limited:
+                rejected.append(single)  # e.g. "only 0 of 1 GPU available"
             if last is not None:
-                if last.rejected_reason and last.count > 1 and len(counts) > 1:
+                if last.rejected_reason and last.count > 1 and len(counts) > 1 and not last.capacity_limited:
                     last.rejected_reason = f"Does not fit on up to {last.count} GPUs. {last.rejected_reason}"
                 rejected.append(last)
             continue
@@ -366,15 +400,22 @@ def generate(ctx: SelectionContext) -> SelectionResult:
                     break
 
     ranked = rank(ctx, fitting)
-    rejected.sort(key=lambda c: (-c.vram_per_unit_gb * c.count, c.gpu_name))
-    return SelectionResult(ranked, rejected, policy_blocked, too_small)
+    # Capacity rejections first (most actionable), then by size.
+    rejected.sort(key=lambda c: (not c.capacity_limited, -c.vram_per_unit_gb * c.count, c.gpu_name))
+    return SelectionResult(ranked, rejected, policy_blocked, too_small, capacity_blocked)
 
 
 # --------------------------------------------------------------------------- ranking
 
 
-def _shortfall(ratio: Optional[float]) -> float:
-    return 0.5 if ratio is None else max(0.0, 1.0 - ratio)
+def _shortfall(ratio: Optional[float], unknown: float = 0.5) -> float:
+    return unknown if ratio is None else max(0.0, 1.0 - ratio)
+
+
+def _unknown_penalty(ratios: list[Optional[float]]) -> float:
+    """Unknown throughput must never look better than a known shortfall: use the worst known one."""
+    known = [_shortfall(r) for r in ratios if r is not None]
+    return max([0.5, *known])
 
 
 def rank(ctx: SelectionContext, candidates: list[Candidate]) -> list[Candidate]:
@@ -386,13 +427,15 @@ def rank(ctx: SelectionContext, candidates: list[Candidate]) -> list[Candidate]:
     prio = ctx.priority
     costs = [c.cost.hourly for c in candidates if c.cost and c.cost.hourly > 0]
     min_cost = min(costs) if costs else None
+    unknown_bw = _unknown_penalty([c.bandwidth_ratio for c in candidates])
+    unknown_compute = _unknown_penalty([c.compute_ratio for c in candidates])
     for c in candidates:
         util = c.utilization_percent / 100.0
         score = w.units * c.gpu_units
         score += w.waste * max(0.0, 1.0 - util)
         score += w.tight * max(0.0, util - prio.comfortable_utilization) * 10
-        score += w.bandwidth * _shortfall(c.bandwidth_ratio)
-        score += w.compute * _shortfall(c.compute_ratio)
+        score += w.bandwidth * _shortfall(c.bandwidth_ratio, unknown_bw)
+        score += w.compute * _shortfall(c.compute_ratio, unknown_compute)
         if ctx.settings.ranking.use_inventory or c.availability in ("unavailable", "limited"):
             score += w.availability * AVAILABILITY_PENALTY.get(c.availability, 0.5)
         if ctx.req.prefer_lowest_cost and min_cost:

@@ -71,7 +71,7 @@ def test_custom_model(client):
     r = client.post("/api/v1/calculate", json={**calc, "custom_model": custom})
     assert r.status_code == 200
     assert r.json()["model"]["metadata_status"] == "user_defined"
-    assert "CUSTOM" in r.json()["recommendation"]["ai_flavor"]
+    assert r.json()["recommendation"]["ai_flavor"].startswith("AI-32B-")  # 20B custom LLM -> AI-32B tier
 
 
 def test_compare(client):

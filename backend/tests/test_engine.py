@@ -32,10 +32,11 @@ def test_moe_memory_uses_total_and_compute_uses_active(models, catalog, settings
     assert any(w.code == "MOE_TOTAL_PARAMS" for w in res.warnings)
 
 
-def test_qwen3_30b_a3b_flavor(models, catalog, settings):
+def test_moe_flavor_tier_follows_total_parameters(models, catalog, settings):
     res = calculate(req(context_length=8192, performance_priority="performance"), models["qwen3-30b-a3b"], catalog, settings)
-    assert res.recommendation.ai_flavor.startswith("AI-MOE-30B-A3B-Q4-")
-    assert res.recommendation.flavor_name.startswith("ai.llm.moe-30b-a3b.int4.")
+    assert res.recommendation.ai_flavor.startswith("AI-32B-Q4-")  # 30.5B total -> AI-32B tier
+    assert res.recommendation.flavor_tier_id == "ai-32b"
+    assert res.recommendation.flavor_name.startswith("ai.llm.32b.int4.")
 
 
 # ------------------------------------------------------------------ recommendation
@@ -56,7 +57,8 @@ def test_llama_70b_int4_balanced(models, catalog, settings):
     assert res.confidence_label == "ESTIMATED"
     # A 48 GB L40S cannot hold it on its own.
     assert any(c.gpu_id == "nvidia-l40s" and c.count == 1 and not c.fits for c in res.rejected)
-    assert res.openstack["gpu"]["mode"] in ("pci_passthrough", "vgpu")
+    assert res.openstack["gpu"]["mode"] in ("PCI_PASSTHROUGH", "VGPU")
+    assert res.deployment_spec["gpu"]["physical_gpu_id"] == res.recommendation.gpu_id
     assert res.explanation and res.trace
 
 
@@ -68,9 +70,13 @@ def test_llama_70b_fp8_kv_fits_single_h100(models, catalog, settings):
         settings,
     )
     assert res.recommendation.count == 1
-    assert res.recommendation.ai_flavor == "AI-70B-Q4-PROD"
-    assert res.recommendation.flavor_name == "ai.llm.70b.int4.prod"
-    assert res.openstack["name"] == "ai-70b-q4-prod"
+    assert res.recommendation.ai_flavor == "AI-70B-Q4-PRO"
+    assert res.recommendation.ai_flavor_short == "AI-70B-PRO"  # INT4 is the tier baseline
+    assert res.recommendation.flavor_name == "ai.llm.70b.int4.pro"
+    assert res.openstack["name"] == "ai-70b-q4-pro"
+    # PCI aliases are site configuration: never invented, flagged instead.
+    assert "pci_passthrough:alias" not in res.openstack["extra_specs"]
+    assert any("PCI alias" in n for n in res.openstack["requires_configuration"])
 
 
 def test_small_model_gets_vgpu_on_economy(models, catalog, settings):
@@ -83,7 +89,7 @@ def test_small_model_gets_vgpu_on_economy(models, catalog, settings):
     rec = res.recommendation
     assert rec.mode == "vgpu"
     assert rec.ai_flavor == "AI-14B-Q4-SHARED"
-    assert res.openstack["gpu"]["mode"] == "vgpu"
+    assert res.openstack["gpu"]["mode"] == "VGPU"
     assert res.openstack["extra_specs"]["resources:VGPU"] == "1"
     assert any(w.code == "VGPU_PERF" for w in res.warnings)
 
@@ -148,10 +154,10 @@ def test_safety_headroom_toggle(models, catalog, settings):
     assert on.memory.required_vram_gb == pytest.approx(on.memory.subtotal_gb * 1.15, abs=0.02)
 
 
-def test_development_environment_uses_10_percent_and_dev_flavor(models, catalog, settings):
+def test_development_environment_uses_10_percent(models, catalog, settings):
     res = calculate(req(environment="development", allow_vgpu=False), models["llama-3.1-8b-instruct"], catalog, settings)
     assert res.memory.safety_margin_percent == 10
-    assert res.recommendation.flavor_name.endswith(".dev")
+    assert res.recommendation.ai_flavor.endswith("-PRO")
 
 
 # ------------------------------------------------------------------ NVIDIA + AMD matching

@@ -98,4 +98,7 @@ def gpu_tensor_tflops(gpu: GPUSpec, compute_dtype: str) -> tuple[Optional[float]
         return gpu.fp16_tflops, "No BF16 support: model would be served in FP16."
     if compute_dtype == "fp16":
         return gpu.fp16_tflops, None
+    if compute_dtype == "tf32" and gpu.fp16_tflops:
+        # Datasheets list TF32 at half the dense FP16 rate on Ampere/Hopper/Blackwell (e.g. A100 156 vs 312).
+        return gpu.fp16_tflops / 2, "TF32 throughput estimated as half of dense FP16."
     return None, f"No {compute_dtype.upper()} throughput data in catalog."

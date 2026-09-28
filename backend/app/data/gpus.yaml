@@ -3,6 +3,8 @@
 # framebuffer reported by nvidia-smi / rocm-smi where known; otherwise nominal vram_gb (decimal).
 # cost_per_hour is intentionally null: set your own prices in the GPU Catalog admin page.
 # interconnect_type: PCIe | NVLink | NVLink bridge | Infinity Fabric | ... (high-speed GPU link).
+# openstack_pci_alias is site configuration (must match [pci] alias in nova.conf) and is left null
+# here; the OpenStack flavor compiler lists it under requires_configuration until you set it.
 
 gpus:
   # ------------------------------------------------------------------ NVIDIA
@@ -26,7 +28,7 @@ gpus:
     power_watts: 70
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: t4
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/tesla-t4/
     metadata_status: imported
     notes: No BF16 support; BF16 models are served in FP16.
@@ -51,7 +53,7 @@ gpus:
     power_watts: 150
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: a10
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/products/a10-gpu/
     metadata_status: imported
 
@@ -75,7 +77,7 @@ gpus:
     power_watts: 72
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: l4
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/l4/
     metadata_status: imported
 
@@ -99,7 +101,7 @@ gpus:
     power_watts: 350
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: l40s
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/l40s/
     metadata_status: imported
     notes: No NVLink - multi-GPU model splits run over PCIe.
@@ -124,7 +126,7 @@ gpus:
     power_watts: 600
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: rtxpro6000
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/
     metadata_status: imported
     notes: Tensor throughput not yet imported; compute adequacy is reported as unknown.
@@ -149,7 +151,7 @@ gpus:
     power_watts: 400
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: a100-40g
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/a100/
     metadata_status: imported
 
@@ -173,7 +175,7 @@ gpus:
     power_watts: 400
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: a100-80g
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/a100/
     metadata_status: imported
 
@@ -197,7 +199,7 @@ gpus:
     power_watts: 700
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: h100
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/h100/
     metadata_status: imported
 
@@ -221,7 +223,7 @@ gpus:
     power_watts: 400
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: h100-nvl
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/h100/
     metadata_status: imported
     notes: NVLink via 2- or 4-way bridge.
@@ -246,7 +248,7 @@ gpus:
     power_watts: 700
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: h200
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/h200/
     metadata_status: imported
 
@@ -270,7 +272,7 @@ gpus:
     power_watts: 1000
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: b200
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/dgx-b200/
     metadata_status: imported
     notes: vGPU support status not imported (treated as unavailable).
@@ -295,7 +297,7 @@ gpus:
     power_watts: null
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: gb200
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/gb200-nvl72/
     metadata_status: imported
     notes: Per-GPU share of GB200 NVL72 figures. Rack-scale NVLink domain (72 GPUs) is not modelled.
@@ -320,7 +322,7 @@ gpus:
     power_watts: null
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: b300
+    openstack_pci_alias: null
     metadata_source: https://www.nvidia.com/en-us/data-center/dgx-b300/
     metadata_status: imported
     notes: Tensor throughput not imported; compute adequacy is reported as unknown.
@@ -346,7 +348,7 @@ gpus:
     power_watts: 300
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: mi210
+    openstack_pci_alias: null
     metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi200/mi210.html
     metadata_status: imported
     notes: Runs vLLM / SGLang / TGI on ROCm. No FP8 support.
@@ -371,7 +373,7 @@ gpus:
     power_watts: 250
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: mi250
+    openstack_pci_alias: null
     metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi200/mi250.html
     metadata_status: imported
     notes: >-
@@ -398,7 +400,7 @@ gpus:
     power_watts: 280
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: mi250x
+    openstack_pci_alias: null
     metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi200/mi250x.html
     metadata_status: imported
     notes: >-
@@ -425,7 +427,7 @@ gpus:
     power_watts: 750
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: mi300x
+    openstack_pci_alias: null
     metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html
     metadata_status: imported
     notes: Supports compute/memory partitioning (CPX/NPS modes). Runs vLLM / SGLang on ROCm; TensorRT-LLM is NVIDIA-only.
@@ -450,7 +452,7 @@ gpus:
     power_watts: 1000
     cost_per_hour: null
     availability: unknown
-    openstack_pci_alias: mi325x
+    openstack_pci_alias: null
     metadata_source: https://www.amd.com/en/products/accelerators/instinct/mi300/mi325x.html
     metadata_status: imported
     notes: Supports compute/memory partitioning (CPX/NPS modes). Runs vLLM / SGLang on ROCm; TensorRT-LLM is NVIDIA-only.

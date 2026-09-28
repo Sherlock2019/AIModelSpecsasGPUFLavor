@@ -10,11 +10,16 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from . import repository as repo
+from .ai_flavors import models_in_tier, size_flavor
 from .db import get_session
-from .engine import SizingError, calculate
+from .engine import SizingError, calculate, size_ml
 from .engine.config import EngineSettings
+from .engine.ml import CATEGORIES as ML_CATEGORIES
 from .exporters import EXPORTERS
+from .inventory import StaticOpenStackGPUInventory
+from .openstack_compiler import OpenStackFlavorCompiler
 from .schemas import (
+    AIFlavorDefinition,
     BenchmarkRecord,
     CalculateRequest,
     CalculationResult,
@@ -22,8 +27,14 @@ from .schemas import (
     CompareModelsRequest,
     ComparePrecisionRequest,
     CustomModelRequest,
+    DeploymentSpecCreate,
+    DeploymentSpecRecord,
+    FlavorSizeRequest,
+    FlavorSizeResult,
     GPUSpec,
     InventoryRecord,
+    MLSizingRequest,
+    MLSizingResult,
     ModelSpec,
     ModelStatusPatch,
     SaveCalculationRequest,
@@ -412,6 +423,136 @@ def remove_calculation(calc_id: int, session: Session = Depends(get_session)):
     if not repo.delete_calculation(session, calc_id):
         raise HTTPException(status_code=404, detail="Calculation not found")
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------- AI VM flavors
+
+
+@router.get("/ai-flavors")
+def get_ai_flavors(include_disabled: bool = False, session: Session = Depends(get_session)) -> list[dict[str, Any]]:
+    """Flavor tiers with the catalog models that fall into each tier."""
+    tiers = repo.list_flavors(session, include_disabled=include_disabled)
+    models = repo.list_models(session)
+    settings = repo.get_settings(session)
+    enabled = [t for t in tiers if t.enabled]
+    return [
+        {**t.model_dump(mode="json"), "model_ids": models_in_tier(t, models, enabled, settings) if t.enabled else []}
+        for t in tiers
+    ]
+
+
+@router.post("/ai-flavors/size", response_model=FlavorSizeResult)
+def post_size_flavor(body: FlavorSizeRequest, session: Session = Depends(get_session)):
+    if body.flavor_id and repo.get_flavor(session, body.flavor_id) is None:
+        raise HTTPException(status_code=404, detail=f"AI flavor '{body.flavor_id}' not found")
+    if body.custom_model is not None:
+        model = body.custom_model.model_copy(update={"metadata_status": "user_defined"})
+    else:
+        model = repo.get_model(session, body.model_id)
+        if model is None:
+            raise HTTPException(status_code=404, detail=f"Model '{body.model_id}' not found")
+    try:
+        return size_flavor(body, model, repo.catalog_snapshot(session), repo.get_settings(session))
+    except SizingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/ai-flavors/{flavor_id}", response_model=AIFlavorDefinition)
+def get_ai_flavor(flavor_id: str, session: Session = Depends(get_session)):
+    flavor = repo.get_flavor(session, flavor_id)
+    if flavor is None:
+        raise HTTPException(status_code=404, detail="AI flavor not found")
+    return flavor
+
+
+@router.post("/ai-flavors", response_model=AIFlavorDefinition, status_code=201, dependencies=[Depends(require_admin)])
+def create_ai_flavor(spec: AIFlavorDefinition, session: Session = Depends(get_session)):
+    if repo.get_flavor(session, spec.id):
+        raise HTTPException(status_code=409, detail="AI flavor id already exists")
+    return repo.upsert_flavor(session, spec)
+
+
+@router.put("/ai-flavors/{flavor_id}", response_model=AIFlavorDefinition, dependencies=[Depends(require_admin)])
+def update_ai_flavor(flavor_id: str, spec: AIFlavorDefinition, session: Session = Depends(get_session)):
+    if spec.id != flavor_id:
+        raise HTTPException(status_code=400, detail="Path id and body id differ")
+    if repo.get_flavor(session, flavor_id) is None:
+        raise HTTPException(status_code=404, detail="AI flavor not found")
+    return repo.upsert_flavor(session, spec)
+
+
+@router.delete("/ai-flavors/{flavor_id}", status_code=204, dependencies=[Depends(require_admin)])
+def remove_ai_flavor(flavor_id: str, session: Session = Depends(get_session)):
+    if not repo.delete_flavor(session, flavor_id):
+        raise HTTPException(status_code=404, detail="AI flavor not found")
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------- deployment specs
+
+
+def _spec_record(row) -> DeploymentSpecRecord:
+    return DeploymentSpecRecord(
+        id=row.id,
+        name=row.name,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+        workload_type=row.workload_type,
+        ai_flavor=row.ai_flavor,
+        spec=row.spec,
+        openstack=row.openstack,
+    )
+
+
+@router.post("/deployment-specs", response_model=DeploymentSpecRecord, status_code=201)
+def create_deployment_spec(body: DeploymentSpecCreate, session: Session = Depends(get_session)):
+    """"Deploy" for the MVP: store the AIFlavorDeploymentSpec / MLDeploymentSpec and compile the
+    OpenStack flavor recommendation. Nothing is provisioned."""
+    try:
+        compiled = OpenStackFlavorCompiler(StaticOpenStackGPUInventory(session)).compile(body.spec)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid deployment spec: {exc}") from exc
+    return _spec_record(repo.save_deployment_spec(session, body.name, body.spec, compiled))
+
+
+@router.get("/deployment-specs", response_model=list[DeploymentSpecRecord])
+def get_deployment_specs(session: Session = Depends(get_session)):
+    return [_spec_record(r) for r in repo.list_deployment_specs(session)]
+
+
+@router.delete("/deployment-specs/{spec_id}", status_code=204)
+def remove_deployment_spec(spec_id: int, session: Session = Depends(get_session)):
+    if not repo.delete_deployment_spec(session, spec_id):
+        raise HTTPException(status_code=404, detail="Deployment spec not found")
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------- custom ML models
+
+
+@router.get("/ml/meta")
+def ml_meta(session: Session = Depends(get_session)) -> dict[str, Any]:
+    s = repo.get_settings(session)
+    return {
+        "categories": [
+            {"id": k, "label": v.label, "input_kind": v.input_kind, "defaults": v.defaults} for k, v in ML_CATEGORIES.items()
+        ],
+        "frameworks": [{"id": k, "label": v.label, "nvidia_only": v.nvidia_only} for k, v in s.ml.frameworks.items()],
+        "optimizers": [{"id": k, "label": v.label} for k, v in s.ml.optimizers.items()],
+        "precisions": [
+            {"id": k, "label": v.label, "bytes_per_parameter": v.bytes_per_parameter}
+            for k, v in s.precision.items()
+            if k in ("fp32", "tf32", "fp16", "bf16", "fp8", "int8", "int4")
+        ],
+        "default_adapter_percent": s.ml.default_adapter_percent,
+    }
+
+
+@router.post("/ml/size", response_model=MLSizingResult)
+def post_ml_size(body: MLSizingRequest, session: Session = Depends(get_session)):
+    try:
+        return size_ml(body, repo.catalog_snapshot(session), repo.get_settings(session), with_suggestions=True)
+    except SizingError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------- settings

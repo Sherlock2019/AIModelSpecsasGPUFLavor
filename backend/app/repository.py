@@ -8,11 +8,21 @@ import yaml
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .db import BenchmarkRow, GPURow, InventoryRow, ModelRow, SavedCalculationRow, SettingRow, VGPUProfileRow
+from .db import (
+    AIFlavorRow,
+    BenchmarkRow,
+    DeploymentSpecRow,
+    GPURow,
+    InventoryRow,
+    ModelRow,
+    SavedCalculationRow,
+    SettingRow,
+    VGPUProfileRow,
+)
 from .engine.calculator import Catalog
 from .engine.config import DATA_DIR, EngineSettings, load_default_settings_dict
 from .inventory import StaticInventoryAdapter
-from .schemas import BenchmarkRecord, GPUSpec, InventoryRecord, ModelSpec, VGPUProfile
+from .schemas import AIFlavorDefinition, BenchmarkRecord, GPUSpec, InventoryRecord, ModelSpec, VGPUProfile
 
 ENGINE_SETTINGS_KEY = "engine"
 
@@ -37,6 +47,9 @@ def seed(session: Session) -> None:
     for raw in _load_yaml("vgpu_profiles.yaml", "vgpu_profiles"):
         if session.get(VGPUProfileRow, raw["profile_name"]) is None:
             upsert_profile(session, VGPUProfile.model_validate(raw), commit=False)
+    for raw in _load_yaml("ai_flavors.yaml", "ai_flavors"):
+        if session.get(AIFlavorRow, raw["id"]) is None:
+            upsert_flavor(session, AIFlavorDefinition.model_validate(raw), commit=False)
     if session.scalar(select(InventoryRow.id).limit(1)) is None:
         for raw in _load_yaml("inventory.yaml", "inventory"):
             rec = InventoryRecord.model_validate(raw)
@@ -277,6 +290,78 @@ def delete_calculation(session: Session, calc_id: int) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------- AI flavors
+
+
+def list_flavors(session: Session, include_disabled: bool = True) -> list[AIFlavorDefinition]:
+    out = []
+    for row in session.scalars(select(AIFlavorRow)):
+        spec = dict(row.spec)
+        spec["enabled"] = row.enabled
+        out.append(AIFlavorDefinition.model_validate(spec))
+    out.sort(key=lambda f: f.parameter_ceiling_b)
+    return [f for f in out if include_disabled or f.enabled]
+
+
+def get_flavor(session: Session, flavor_id: str) -> Optional[AIFlavorDefinition]:
+    row = session.get(AIFlavorRow, flavor_id)
+    if row is None:
+        return None
+    spec = dict(row.spec)
+    spec["enabled"] = row.enabled
+    return AIFlavorDefinition.model_validate(spec)
+
+
+def upsert_flavor(session: Session, spec: AIFlavorDefinition, commit: bool = True) -> AIFlavorDefinition:
+    row = session.get(AIFlavorRow, spec.id)
+    if row is None:
+        row = AIFlavorRow(id=spec.id)
+        session.add(row)
+    row.enabled = spec.enabled
+    row.spec = spec.model_dump(mode="json")
+    if commit:
+        session.commit()
+    return spec
+
+
+def delete_flavor(session: Session, flavor_id: str) -> bool:
+    row = session.get(AIFlavorRow, flavor_id)
+    if row is None:
+        return False
+    session.delete(row)
+    session.commit()
+    return True
+
+
+# ---------------------------------------------------------------------------- deployment specs
+
+
+def save_deployment_spec(session: Session, name: Optional[str], spec: dict, openstack: dict) -> DeploymentSpecRow:
+    row = DeploymentSpecRow(
+        name=name,
+        workload_type=str(spec.get("workload_type", "llm")),
+        ai_flavor=str(spec.get("ai_flavor", "")),
+        spec=spec,
+        openstack=openstack,
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+def list_deployment_specs(session: Session) -> list[DeploymentSpecRow]:
+    return list(session.scalars(select(DeploymentSpecRow).order_by(DeploymentSpecRow.created_at.desc())))
+
+
+def delete_deployment_spec(session: Session, spec_id: int) -> bool:
+    row = session.get(DeploymentSpecRow, spec_id)
+    if row is None:
+        return False
+    session.delete(row)
+    session.commit()
+    return True
+
+
 # ---------------------------------------------------------------------------- engine snapshot
 
 
@@ -289,4 +374,5 @@ def catalog_snapshot(session: Session, site: Optional[str] = None) -> Catalog:
         capacity=capacity,
         has_inventory=bool(capacity),
         benchmarks=list_benchmarks(session),
+        ai_flavors=list_flavors(session, include_disabled=False),
     )

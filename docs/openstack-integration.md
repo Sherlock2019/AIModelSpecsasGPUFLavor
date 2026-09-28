@@ -1,83 +1,91 @@
 # OpenStack integration
 
-## Flavor output (available now)
+Nothing is provisioned. The application produces a **deployment spec** (what the AI VM needs) and compiles it into a
+**Nova flavor recommendation** for your team to review and create.
 
-Every calculation with a fit produces a flavor recommendation. It appears on the *Infrastructure output* tab, in `openstack` and
-`openstack_yaml` in the API, and in the exports. **It is generated only and never deployed.**
+## 1. Deployment spec
 
-Full GPU (PCI passthrough):
+Every LLM, AI flavor and custom ML result carries `deployment_spec`. **Deploy** stores it through `POST /api/v1/deployment-specs`,
+and it is listed under *Saved & Specs*. The spec is infrastructure-neutral:
 
-```yaml
-name: ai-70b-q4-prod
-vcpus: 16
-ram_mb: 81920
-disk_gb: 100
-gpu:
-  mode: pci_passthrough
-  model: NVIDIA H100 80GB
-  minimum_vram_gb: 80
-  count: 1
-extra_specs:
-  pci_passthrough:alias: h100:1
-  hw:mem_page_size: large
-model:
-  name: Llama 3.1 70B Instruct
-  max_parameters_b: 71
-  architecture: dense
-  precision: int4
-  max_context: 32768
-workload:
-  type: inference
-  framework: vllm
-  concurrency: 20
+```json
+{
+  "workload_type": "llm | custom_ml",
+  "ai_flavor": "AI-70B-Q4-PRO",
+  "display_name": "AI-70B-PRO",
+  "flavor_slug": "ai-70b-q4-pro",
+  "model": {"id": "llama-3.3-70b-instruct", "precision": "int4", "context": 32768},
+  "workload": {"task": "inference", "framework": "vllm", "concurrency": 20},
+  "vm": {"vcpus": 16, "ram_gb": 80, "disk_gb": 100},
+  "gpu": {"mode": "dedicated", "count": 1, "vendor": "NVIDIA", "physical_gpu": "NVIDIA H100 NVL 94GB",
+          "physical_gpu_id": "nvidia-h100-nvl", "minimum_vram_gb": 94, "required_vram_gb": 88.2},
+  "gpu_requirement": {"minimum_vram_gb": 88.2, "compute_class": "very_high", "bandwidth_class": "high", "gpu_count": 1, "mode": "full_gpu"},
+  "recommendation": {"vendor": "NVIDIA", "gpu_model": "H100 NVL 94GB", "gpu_count": 1, "mode": "dedicated"}
+}
 ```
 
-vGPU:
-
-```yaml
-gpu:
-  mode: vgpu
-  vgpu_profile: L40S-16C
-  physical_gpu: NVIDIA L40S
-  sharing: time_sliced
-  minimum_vram_gb: 16
-  count: 1
-extra_specs:
-  resources:VGPU: '1'
-  trait:CUSTOM_VGPU_L40S_16C: required
-```
-
-These sizing rules are configurable under `openstack` in Settings:
+VM sizing rules live in Settings → `openstack`:
 
 | Setting | Rule |
 |---|---|
-| vCPUs | 8 for vGPU; 16 per GPU for full GPU, capped at 128 |
-| RAM | `max(min_ram, weights × 1.5 + 16 GB)`, rounded up to 16 GB (32 GB minimum for vGPU, 64 GB for full GPU) |
+| vCPUs | 8 for vGPU; 16 per GPU for dedicated, capped at 128 |
+| RAM | `max(min, weights × 1.5 + 16 GB)`, rounded up to 16 GB; the minimum is 32 GB for vGPU and 64 GB for dedicated |
 | Disk | `max(100 GB, weights × 2)` |
-| Extra specs | Performance tiers add `hw:cpu_policy: dedicated` |
 
-The PCI alias comes from each GPU's `openstack_pci_alias` and must match the `[pci] alias` in your Nova config. The vGPU
-trait naming (`CUSTOM_VGPU_<PROFILE>`) assumes you tag resource providers per mdev type.
+## 2. OpenStackFlavorCompiler
 
-## Inventory adapter (future)
+`app/openstack_compiler.py` turns a spec into a flavor. It reads site configuration from the inventory adapter
+(`get_gpu_traits()`):
 
-`app/inventory.py` defines:
+| Mode | Extra specs | Needs from your cloud |
+|---|---|---|
+| vGPU | `resources:VGPU=1` (standard Nova resource class), `trait:<profile trait>=required` | The profile's **Placement trait** (GPU Inventory → vGPU profiles) |
+| Dedicated / multi-GPU | `pci_passthrough:alias=<alias>:<count>`, `hw:mem_page_size=large` | The GPU's **PCI alias**, matching `[pci] alias` in `nova.conf` (GPU Inventory → GPUs) |
 
-```python
-class InfrastructureInventory(ABC):
-    def get_available_gpus(self) -> list[GPUSpec]: ...
-    def get_vgpu_profiles(self) -> list[VGPUProfile]: ...
-    def get_gpu_capacity(self) -> dict[str, Capacity]: ...
-    def get_flavors(self) -> list[dict]: ...
+Performance tiers and training workloads also get `hw:cpu_policy=dedicated`.
+
+**PCI aliases and traits are never guessed.** The bundled catalog leaves them empty. Until you set them, the compiled
+flavor omits those extra specs and lists what is missing under `requires_configuration`. The UI shows these items
+after Deploy.
+
+```yaml
+name: ai-14b-q4-shared
+vcpus: 8
+ram_mb: 32768
+disk_gb: 100
+gpu: {mode: VGPU, count: 1, minimum_vram_gb: 24, profile_class: 24 GB vGPU class}
+extra_specs:
+  resources:VGPU: '1'
+  trait:CUSTOM_VGPU_L40S_24C: required      # present only once configured
+requires_configuration: []
+properties: {ai:flavor: AI-14B-Q4-SHARED, ai:workload_type: llm}
 ```
 
-`StaticInventoryAdapter` (in use) reads the local database. `OpenStackInventoryAdapter` is a documented stub that
-would read the following:
+## 3. Inventory adapters (`app/inventory.py`)
 
-- **Placement:** resource providers with `PCI_DEVICE` / `VGPU` inventories, with `total − used − reserved` giving capacity
-- **Nova:** `enabled_mdev_types` per compute node, and existing flavors with `pci_passthrough:alias` or `resources:VGPU`
-- **Cyborg:** device profiles, where accelerators are managed by Cyborg
-- **Flavor catalog:** mapping recommended AI flavors to existing flavors
+```python
+class OpenStackGPUInventory(ABC):
+    def get_gpu_resource_providers(self): ...
+    def get_available_vgpu_profiles(self): ...
+    def get_available_pci_gpus(self): ...
+    def get_gpu_traits(self): ...        # {"gpus": {gpu_id: pci_alias}, "vgpu_profiles": {name: trait}}
+    def get_flavors(self): ...
+    def get_capacity(self): ...
+```
 
-The engine only consumes the adapter's output (the `Catalog` snapshot), so a live adapter can be added without engine
-changes. No OpenStack cloud is required today.
+- **`StaticOpenStackGPUInventory`** (in use) answers from the application's own tables: GPU catalog, vGPU profiles
+  (including `available_instances`) and site inventory.
+- **`PlacementOpenStackGPUInventory`** (future) will read Nova, Placement and Cyborg: resource providers with `PCI_DEVICE` / `VGPU`
+  inventories (`total − used − reserved`), `enabled_mdev_types`, traits and existing flavors.
+
+The sizing engine only consumes a catalog snapshot, so a live adapter needs no engine changes.
+
+## 4. Existing capacity
+
+Recommendations already respect capacity:
+
+- A vGPU profile with `available_instances = 0` is skipped with *"Suitable vGPU profile currently unavailable"*, and the next larger profile
+  or a dedicated GPU is recommended.
+- A configuration needing more GPUs than are free is skipped with *"Capacity: only N of M GPUs available"*.
+
+This behaviour is controlled by Settings → `ranking.exclude_insufficient_capacity`.

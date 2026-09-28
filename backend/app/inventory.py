@@ -67,6 +67,95 @@ class StaticInventoryAdapter(InfrastructureInventory):
         return []
 
 
+class OpenStackGPUInventory(ABC):
+    """What the OpenStack flavor compiler needs to know about a cloud's GPU estate."""
+
+    @abstractmethod
+    def get_gpu_resource_providers(self) -> list[dict[str, Any]]:
+        """Resource providers that expose GPUs (name, gpu_id, total, used)."""
+
+    @abstractmethod
+    def get_available_vgpu_profiles(self) -> list[dict[str, Any]]:
+        """vGPU profiles with free capacity (profile_name, physical_gpu, available_instances)."""
+
+    @abstractmethod
+    def get_available_pci_gpus(self) -> list[dict[str, Any]]:
+        """Pass-through GPUs with free capacity (gpu_id, available)."""
+
+    @abstractmethod
+    def get_gpu_traits(self) -> dict[str, dict[str, Optional[str]]]:
+        """Site configuration: {"gpus": {gpu_id: pci_alias}, "vgpu_profiles": {profile: trait}}."""
+
+    @abstractmethod
+    def get_flavors(self) -> list[dict[str, Any]]:
+        """Existing Nova flavors."""
+
+    @abstractmethod
+    def get_capacity(self) -> dict[str, Any]:
+        """gpu_id -> Capacity(installed, available)."""
+
+
+class StaticOpenStackGPUInventory(OpenStackGPUInventory):
+    """MVP: answers from the calculator's own catalog and inventory tables (no live cloud)."""
+
+    def __init__(self, session: Session, site: Optional[str] = None) -> None:
+        self._static = StaticInventoryAdapter(session, site)
+
+    def get_gpu_resource_providers(self) -> list[dict[str, Any]]:
+        cap = self._static.get_gpu_capacity()
+        return [
+            {"name": f"static:{gpu_id}", "gpu_id": gpu_id, "total": c.installed, "used": c.installed - c.available}
+            for gpu_id, c in cap.items()
+        ]
+
+    def get_available_vgpu_profiles(self) -> list[dict[str, Any]]:
+        return [
+            {"profile_name": p.profile_name, "physical_gpu": p.physical_gpu, "available_instances": p.available_instances}
+            for p in self._static.get_vgpu_profiles()
+            if p.available_instances is None or p.available_instances > 0
+        ]
+
+    def get_available_pci_gpus(self) -> list[dict[str, Any]]:
+        return [{"gpu_id": gpu_id, "available": c.available} for gpu_id, c in self._static.get_gpu_capacity().items() if c.available > 0]
+
+    def get_gpu_traits(self) -> dict[str, dict[str, Optional[str]]]:
+        return {
+            "gpus": {g.id: g.openstack_pci_alias for g in self._static.get_available_gpus()},
+            "vgpu_profiles": {p.profile_name: p.openstack_trait for p in self._static.get_vgpu_profiles()},
+        }
+
+    def get_flavors(self) -> list[dict[str, Any]]:
+        return []
+
+    def get_capacity(self) -> dict[str, Any]:
+        return self._static.get_gpu_capacity()
+
+
+class PlacementOpenStackGPUInventory(OpenStackGPUInventory):  # pragma: no cover - future work
+    """Future: Nova + Placement (+ Cyborg) backed inventory. See OpenStackInventoryAdapter below."""
+
+    def __init__(self, *_, **__) -> None:
+        raise NotImplementedError("Placement-backed inventory is not implemented in this version")
+
+    def get_gpu_resource_providers(self):
+        raise NotImplementedError
+
+    def get_available_vgpu_profiles(self):
+        raise NotImplementedError
+
+    def get_available_pci_gpus(self):
+        raise NotImplementedError
+
+    def get_gpu_traits(self):
+        raise NotImplementedError
+
+    def get_flavors(self):
+        raise NotImplementedError
+
+    def get_capacity(self):
+        raise NotImplementedError
+
+
 class OpenStackInventoryAdapter(InfrastructureInventory):  # pragma: no cover - future work
     """Planned sources:
 

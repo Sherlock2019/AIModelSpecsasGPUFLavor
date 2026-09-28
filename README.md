@@ -1,162 +1,259 @@
-# LLM GPU Sizing Calculator
+# AI Model → GPU Flavor Calculator
 
 **Customers should not have to ask "which NVIDIA GPU do I need?". They should be able to say
-"I want to run Llama 70B."** This calculator turns that request into infrastructure.
+"I want to run Llama 70B", "I need an AI-32B VM" or "I train a 2B vision model".**
+This application turns that request into infrastructure: GPU memory, compute and memory-speed class, shared vGPU,
+dedicated GPU or multi-GPU (NVIDIA or AMD), a customer-facing AI flavor, and an OpenStack flavor recommendation.
 
 ```
-MODEL → MODEL METADATA → PRECISION → CONTEXT → CONCURRENCY
-      → MEMORY + COMPUTE → vGPU / FULL GPU / MULTI-GPU → GPU → AI FLAVOR
+CUSTOMER LANGUAGE        "I need an AI-32B VM" · "Run Qwen 14B" · "Train a 2B ViT"
+        ↓
+PRODUCT                  AI flavor tier (AI-1B … AI-400B) or custom LLM / custom ML model
+        ↓
+SIZING ENGINE            weights + KV cache / activations + gradients + optimizer + runtime + headroom
+        ↓
+RESOURCE REQUIREMENT     VRAM · AI compute · GPU memory speed · GPU count · sharing · GPU link
+        ↓
+RESOURCE MATCHER         shared vGPU → one dedicated GPU → multi-GPU   (NVIDIA + AMD, capacity-aware)
+        ↓
+IMPLEMENTATION           AI flavor (AI-14B-SHARED, AI-70B-Q4-PRO, AI-CUSTOM-TRAIN-80G)
+                         + deployment spec + OpenStack flavor recommendation (never auto-provisioned)
 ```
 
-Pick a model from the curated catalog and set precision, context, concurrency, priority and framework. The calculator returns:
+Every result is labelled **ESTIMATED** or **BENCHMARK-BASED**, and **memory fit** ("does it fit?") is always shown
+separately from **performance fit** ("will it be fast enough?").
 
-```
-Llama 3.1 70B Instruct / INT4                              ESTIMATED
-Estimated VRAM required: 68 GB
-Recommended: 1 × NVIDIA H100 80GB — Dedicated GPU
-Alternative: 1 × NVIDIA H100 NVL 94GB
-vGPU: Not recommended for this workload: needs ~68 GB; the largest supported profile is L40S-48C (48 GiB).
-AI flavor: AI-70B-Q4-PROD
-Why: 39 GB model weights + 16 GB KV cache + 4 GB runtime + 15% production headroom.
-```
+---
 
-(That run uses 20 concurrent requests of about 5,000 tokens each, with an FP8 KV cache. With the default
-FP16 KV cache, the KV cache doubles to 33 GB and the recommendation moves to a 94 GB H100 NVL.)
-
-Every result is labelled **ESTIMATED** or **BENCHMARK-BASED**. Estimates are never presented as measurements.
-
-## Quick start (any Linux server, e.g. an AWS EC2 instance)
+## Quick start on an AWS EC2 instance (public IP)
 
 ```bash
-git clone https://github.com/Sherlock2019/Model2GPUCalculator.git
-cd Model2GPUCalculator
+git clone git@github.com:Sherlock2019/AIModelSpecsasGPUFLavor.git
+cd AIModelSpecsasGPUFLavor
 ./start.sh
 ```
 
-The launcher sets everything up on the first run: Python 3.10+ via the OS package manager if needed, a Python
-virtualenv, and Node.js downloaded to `./.tools`, which is only used to build the UI. It then serves the web UI **and**
-the API from one process on `0.0.0.0:8080`, and prints the URL to open, e.g. `http://<ec2-public-ip>:8080`.
+The first run sets everything up:
 
-**EC2 checklist**
+- Python 3.10+ from the OS package manager, if it is missing
+- a Python virtualenv
+- Node.js downloaded to `./.tools` and checksum-verified (it is only used to build the UI)
 
-1. Use Amazon Linux 2023 or Ubuntu 22.04/24.04, x86 or Graviton. A t3.small or larger is enough. On 1 GB instances, add swap for the one-time UI build.
-2. Security group: add an inbound rule for **TCP 8080**, ideally restricted to your IP ("My IP" in the console).
-3. `./start.sh install-service` keeps it running across reboots and SSH logouts (systemd).
+It then serves the web UI **and** the API from one process on `0.0.0.0:8080` and prints the URL to open,
+e.g. `http://<ec2-public-ip>:8080`.
+
+1. Use Amazon Linux 2023 or Ubuntu 22.04/24.04, x86 or Graviton. A t3.small or larger is enough. On 1 GB instances,
+   add swap for the one-time UI build.
+2. **Security group:** add an inbound rule for **TCP 8080**, ideally restricted to your IP ("My IP").
+3. Run `./start.sh install-service` to keep it running across reboots and SSH logouts (systemd).
 
 | Command | What it does |
 |---|---|
 | `./start.sh` | Set up if needed, start in the background, print the public URL |
 | `./start.sh stop` / `restart` / `status` / `logs` | Manage the running server |
-| `./start.sh install-service` | Run at boot with systemd (`uninstall-service` to remove) |
-| `./start.sh build` | Force re-install dependencies and rebuild the UI (e.g. after `git pull`) |
+| `./start.sh install-service` / `uninstall-service` | Run at boot with systemd |
+| `./start.sh build` | Re-install dependencies and rebuild the UI (after `git pull`) |
 
-Settings live in `.env`, created on the first run: `PORT` (default 8080), `HOST` (default 0.0.0.0) and `ADMIN_TOKEN`.
-The admin token is generated automatically. Anyone who can reach the page can use the calculator, but changing the catalog
-or settings requires that token (paste it under **Settings → Admin access**). It is plain HTTP; put it behind a load
-balancer or reverse proxy with TLS if you need HTTPS.
+Settings live in `.env`, created on the first run:
 
-Docker Compose is also supported: `docker compose up --build`, then open http://localhost:8080.
+- `PORT` (default 8080)
+- `HOST` (default 0.0.0.0)
+- `ADMIN_TOKEN`, generated automatically and printed
 
-Local development:
+Anyone who can reach the page can size workloads. Changing catalogs, flavors or settings requires the admin token,
+entered under **Settings → Admin access**. The server speaks plain HTTP; put a TLS load balancer or proxy in front if needed.
+
+---
+
+## The full workflow
+
+### 1. Choose what to size
+
+The home page (**AI VM Catalog**) asks *"What do you want to size?"* and offers three paths:
+
+| Path | For | Opens |
+|---|---|---|
+| **Select an LLM** | Llama, Qwen, DeepSeek, Mistral, Gemma, Phi, GLM, gpt-oss … (57 catalogued models) | LLM Calculator |
+| **Custom LLM** | Your own language model: parameters, optional layers/heads | LLM Calculator (custom model) |
+| **Custom ML model** | Vision, detection, segmentation, OCR, speech, TTS, embeddings, diffusion, video, recommendation, tabular, time-series, transformers, any network | Custom ML Calculator |
+
+Below the three paths is the **AI VM flavor catalog**, grouped as:
+
+- **Small:** AI-1B, AI-3B, AI-8B
+- **Medium:** AI-14B, AI-32B
+- **Large:** AI-70B, AI-120B
+- **Ultra:** AI-200B, AI-400B
+
+Each card shows the model class, example models, typical GPU memory and best use cases. Hardware internals
+(PCI alias, vGPU profile, Nova resource classes) stay hidden until *Technical details* is opened.
+
+### 2a. Start from an AI flavor (Mode A: "I need an AI-32B VM")
+
+1. **Configure** a flavor card. You get the tier's models, or *Choose another model*, or *Custom model*. Precision,
+   context, concurrency and priority are pre-filled from the tier defaults.
+2. **Size my VM.** The same sizing engine as the calculator computes the real requirement. Tier VRAM ranges
+   are catalog guidance only; the calculator is the source of truth.
+3. Read **Your AI VM**, for example **AI-8B-SHARED** (SKU AI-8B-Q4-SHARED). It shows the GPU memory allocated,
+   the mode (shared / dedicated / multi-GPU) and the model it is recommended for.
+4. The tier is never switched silently:
+   - *"This model exceeds the normal AI-32B tier."* comes with **Upgrade to AI-70B**.
+   - *"This workload can run on a smaller flavor."* comes with **Switch to AI-8B**.
+   - If a tier's policy can't host the workload (for example AI-14B doesn't offer multi-GPU), the next tier that can is recommended, with the reason.
+5. Use the tabs:
+   - **Why AI-…?** shows the memory math, the checks and "why not" for other GPUs.
+   - **Compare options** shows the L40S vs H100 vs H200 style table: GPU count, VRAM, memory fit, mode, headroom, cost and availability.
+   - **Technical details** shows the physical GPU, vGPU profile, OpenStack flavor, deployment spec and calculation trace.
+6. **Deploy** creates an **AIFlavorDeploymentSpec** and the compiled OpenStack flavor. **Nothing is provisioned.**
+   Specs are listed under **Saved & Specs**.
+
+Examples, using the bundled catalog, balanced priority and INT4:
+
+| Request | Required | Result |
+|---|---|---|
+| AI-8B · Llama 3.1 8B · 16K · 5 concurrent | ≈ 11 GB | **AI-8B-SHARED**: L40S-12C vGPU (a full GPU would waste capacity) |
+| AI-70B · Llama 3.3 70B · 32K · 20 concurrent | ≈ 88 GB (FP16 KV cache) | **AI-70B-PRO**: 1 × H100 NVL 94GB |
+| AI-32B · Llama 3.3 70B | — | flagged *exceeds AI-32B* → upgrade to AI-70B |
+| AI-70B · Llama 3.1 8B | — | flagged *can run on AI-8B* |
+| AI-400B · Llama 3.1 405B | ≈ 300 GB | **AI-400B-MULTI**: 2 × B200 (multi-GPU tier) |
+
+### 2b. Start from a model (Mode B: "I want to run Qwen 14B")
+
+**LLM Calculator:** pick a model, then set the five inputs. They are precision, context length,
+concurrent requests (with presets) and performance priority, and results update live.
+
+- **Your GPU requirement:** VRAM, AI compute, GPU memory speed, GPU count, sharing and multi-GPU link.
+- **Matching GPUs:** ranked NVIDIA and AMD cards (top 3 plus the best AMD, multi-GPU and shared options), each with memory fit,
+  performance fit and technical details.
+- **From model to GPU**, **Why this recommendation?**, **Ways to need less hardware** (one-click what-ifs such as an FP8
+  KV cache) and **Technical details** (memory chart, formulas, OpenStack flavor, precision comparison, exports).
+- The banner *"This is an AI-14B-SHARED workload. Open it as an AI VM flavor"* jumps to Mode A with the same inputs.
+  Both modes use the same engine.
+
+### 2c. Custom ML model
+
+1. Simple mode asks for:
+   - model name and model type
+   - task (**inference / training / fine-tuning**; fine-tuning is **full / LoRA / QLoRA**)
+   - parameters (millions), precision and batch size
+   - the input size for that model type: image W×H×C, video frames, audio seconds, sequence length, diffusion steps or input features
+   - concurrent requests and performance priority
+2. **Advanced model settings** cover:
+   - framework (PyTorch, TensorFlow, JAX, ONNX Runtime, TensorRT)
+   - layers, hidden size and I/O tensors
+   - **measured activation memory**, gradient checkpointing and optimizer (AdamW/Adam/SGD/Adafactor) with its precision
+   - FP32 master weights, training and gradient precision, LoRA adapter size
+   - data-, tensor- and pipeline-parallel sizes, model growth and safety margin
+3. **Calculate GPU configuration.** The **Custom model analysis** splits memory into:
+   - weights
+   - gradients
+   - optimizer states
+   - **activations (estimated unless you enter a measured value)**
+   - runtime and headroom
+
+   KV cache is only added when the model uses one.
+4. The same requirement panel, NVIDIA/AMD matches, why and compare views, and what-ifs follow. What-ifs include enabling
+   gradient checkpointing, LoRA → QLoRA, halving the batch, BF16 and INT8 serving.
+5. The flavor is generated automatically: **AI-CUSTOM-INF-10G**, **AI-CUSTOM-TRAIN-80G** or **AI-CUSTOM-TRAIN-2X180G**,
+   with a readable name such as *"Custom ML — Training — 80 GB GPU"*. **Deploy** creates an **MLDeploymentSpec**.
+
+Example: a 2B-parameter vision model, training, BF16 weights, batch 16, 224×224×3. It needs:
+
+- 4 GB weights
+- 4 GB gradients
+- 24 GB AdamW states plus FP32 master weights
+- about 8 GB of estimated activations
+- 2.7 GB runtime and 15% headroom
+
+The total is about 49 GB. That gives a dedicated H100 80GB and **AI-CUSTOM-TRAIN-80G**.
+
+### 3. Administer the catalogs (Admin section)
+
+| Page | What you manage |
+|---|---|
+| **Models** | LLM catalog: add, edit and disable models, import and export YAML, metadata status (VERIFIED / IMPORTED / USER-DEFINED) |
+| **AI Flavors** | Tiers, parameter bounds, baseline precision, default workload, allowed vGPU / full / multi-GPU, description, commercial SKU, enable/disable |
+| **GPU Inventory** | Physical GPUs (NVIDIA + AMD specs, **PCI alias**, GPU link, cost, availability); vGPU profiles (**free instances**, **Placement trait**); site inventory (installed / available) |
+| **Benchmarks** | Measured results. A matching record makes the result BENCHMARK-BASED |
+| **Settings** | Every engine constant: precisions, frameworks, priorities, class thresholds, ML heuristics, OpenStack sizing |
+
+**Capacity-aware.** If a suitable vGPU profile has 0 free instances, or fewer GPUs are free than a configuration needs,
+that option is skipped with the reason stated, for example *"Suitable vGPU profile currently unavailable"*, and the
+next suitable option is recommended.
+
+**OpenStack.** PCI aliases and vGPU traits are site configuration and are never guessed. Until they are set in
+GPU Inventory, compiled flavors list them under `requires_configuration`.
+
+---
+
+## Concepts in one page
+
+**Parameters and precision.** Weight memory is `parameters × bytes/parameter × quantization overhead`: 0.5 bytes for INT4, 1 for FP8/INT8
+and 2 for BF16/FP16. For example, 70B at INT4 is 35 GB raw, or about 38.8 GB with overhead.
+
+**KV cache (LLMs).** Each token in flight keeps a key and a value for every KV head in every layer:
+`2 × layers × kv_heads × head_dim × bytes`. For Llama 70B, 20 concurrent requests of 5,000 tokens add about 33 GB at FP16.
+
+**Activations (general ML).** Intermediate tensors grow with batch × input size × depth. For training they are often
+the largest consumer of memory, so the calculator never sizes training from parameters alone. The estimates are
+heuristics and are always labelled; enter a measured value when you have one.
+
+**Training.** Training memory is `weights + gradients + optimizer states (+ FP32 master weights) + activations + runtime + headroom`.
+Mixed-precision AdamW is about 16 bytes per trainable parameter before activations. LoRA trains small adapters only;
+QLoRA also stores the frozen base model in 4-bit.
+
+**Dense vs MoE.** MoE memory follows *total* parameters (every expert is resident). Compute follows *active* parameters.
+
+**vGPU / dedicated / multi-GPU.**
+
+- A **shared vGPU** is a fixed slice of a GPU (time-sliced or MIG).
+- A **dedicated GPU** is PCI passthrough of one whole GPU.
+- **Multi-GPU** splits the model (tensor or pipeline parallelism) and wants NVLink or AMD Infinity Fabric.
+
+---
+
+## Development
 
 ```bash
-# backend (Python 3.12+)
-cd backend
-python -m venv .venv && . .venv/bin/activate
+# backend (Python 3.10+)
+cd backend && python -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload         # http://localhost:8000/docs
-pytest
+pytest                                # engine, flavors, custom ML, API
 
 # frontend (Node 20+)
-cd frontend
-npm install
-npm run dev                           # http://localhost:5173, proxies /api to :8000
+cd frontend && npm install
+npm run dev                           # http://localhost:5173 (proxies /api to :8000; VITE_API_TARGET to change)
 npm test                              # Vitest
-npm run e2e                           # Playwright (optional; needs the app running)
+npm run e2e                           # Playwright (needs the app running; E2E_BASE_URL to change)
 ```
 
-If the API runs on a different port, set `VITE_API_TARGET=http://localhost:8010 npm run dev`.
+Docker Compose is also available: `docker compose up --build`, then open http://localhost:8080.
 
 | Environment variable | Purpose |
 |---|---|
 | `DATABASE_URL` | SQLAlchemy URL. Default is SQLite in `backend/var/`. PostgreSQL: `postgresql+psycopg://user:pass@host/db` |
-| `ADMIN_TOKEN` | When set, catalog and settings changes require the `X-Admin-Token` header (enter it under Settings in the UI) |
-| `CORS_ORIGINS` | Comma-separated origins for the API |
+| `ADMIN_TOKEN` | Required `X-Admin-Token` for catalog, flavor and settings changes |
+| `PORT`, `HOST` | Where `start.sh` serves (default `0.0.0.0:8080`) |
 
-## Concepts in one page
+### Main API (`/api/v1`, interactive docs at `/docs`)
 
-**Parameter count.** The number of learned weights, in billions (B). A "70B" model has about 70.6 billion.
-
-**Precision.** The number of bytes that store each weight: BF16/FP16 = 2, FP8/INT8 = 1, INT4 = 0.5. The
-*serving* precision (what you deploy) can differ from the *native* precision (what the model was
-released in).
-
-**Quantization.** Storing weights in fewer bits (INT8, INT4, FP8). Real quantized checkpoints also store
-scales and zero-points, and keep some layers (embeddings, norms, `lm_head`) in 16-bit. That is why the
-calculator applies a configurable **overhead factor**: 1.10 for INT4, 1.05 for INT8 and 1.02 for FP8.
-
-**Weights.** `parameters × bytes/parameter × overhead`. For example, 70B at INT4 is 35 GB raw, or about 38.8 GB with overhead.
-
-**KV cache.** For every token in flight, each layer caches a key and a value vector for each *KV head*:
-`2 × layers × kv_heads × head_dim × bytes`. Llama 3.1 70B uses 320 KiB per token at FP16. Twenty
-concurrent 5,000-token requests therefore need 33 GB, almost as much as the INT4 weights. Models
-with grouped-query attention (GQA) have few KV heads, which keeps this small. DeepSeek's MLA caches
-a compressed latent instead.
-
-**Dense vs MoE.** In a dense model every parameter is used for every token. A Mixture-of-Experts
-model routes each token through a few experts. For example, Qwen3 30B-A3B has 30.5B parameters but uses only about 3.3B
-per token. **Memory is sized on total parameters, because every expert must be resident. Compute is sized on active parameters.**
-
-**vGPU.** One physical GPU split into several virtual GPUs with fixed framebuffers (for example, L40S-24C is
-24 GiB). *Time-sliced* profiles share all compute, so in the worst case each gets 1/N of it. *MIG* profiles get dedicated
-hardware slices. Suitable when the model needs much less than a full GPU. Performance is not guaranteed.
-
-**Full GPU.** A dedicated physical GPU passed through to the VM (PCI passthrough).
-
-**Tensor parallelism.** Splitting each layer across N GPUs, so weights and KV cache divide by N. Every GPU
-still needs its own runtime overhead and communication buffers. The attention-head count must divide by N.
-Beyond one node (8 GPUs), pipeline parallelism is added.
-
-## Using the calculator
-
-1. **Model:** open the model list and search (for example "llama 70b"), or pick from *Popular*. *Model details* shows
-   the official metadata. *Edit* overrides it, and the result is marked **USER OVERRIDE**.
-2. **Precision, context length, concurrent requests** (presets: Development 1, Small 5, Medium 20, Large 100) and
-   **performance priority** (Lowest cost, Balanced, Performance, Max performance).
-3. Read the right-hand side. Results update live, with no Calculate button:
-   - **Your GPU requirement:** GPU memory, AI compute, GPU memory speed, GPU count, sharing and multi-GPU link.
-   - **Matching GPUs:** NVIDIA and AMD options, ranked. Each card shows **Memory fit** ("does it fit?") separately
-     from **Performance fit** ("will it be fast enough?", estimated unless benchmarked), plus *Technical details*.
-4. Below: **From model to GPU** (the derivation), **Why this recommendation?** (with *why not* for other GPUs),
-   **Ways to need less hardware** (one-click what-ifs) and **Technical details** (memory chart, formulas,
-   OpenStack flavor, precision comparison, exports).
-
-The address bar always holds the current calculation, so *Copy link* shares it. The same guide is in the app under
-**How it works**.
-
-## What's in the box
-
-- **Calculator:** a one-page, model-first flow with five default inputs. Advanced options cover framework, request
-  lengths, KV precision, headroom, GPU limits, throughput and TTFT/TPOT targets, and overrides.
-- **Exports:** JSON with the full trace, YAML, CSV, a Markdown report, and copy to clipboard.
-- **Models:** a curated catalog of 50+ models covering Llama, Qwen, Mistral, Ministral, Mixtral, Gemma, DeepSeek, Phi,
-  GLM, Command R and gpt-oss, plus custom models. You can add, edit and disable models, and import or export YAML.
-- **GPU catalog:** 13 NVIDIA GPUs (T4 to B300) and 5 AMD Instinct GPUs (MI210, MI250, MI250X, MI300X, MI325X), plus 30
-  vGPU profiles (time-sliced and MIG) and site inventory. Costs and availability are editable. MI250 and MI250X are
-  catalogued per GCD, because software sees each card as two 64 GB GPUs.
-- **Compare:** models side by side, GPUs side by side, and precisions side by side.
-- **Benchmarks:** record measured results. Matching records switch the result to BENCHMARK-BASED.
-- **Saved calculations** and **Settings.** Every engine constant is editable and validated.
-- **OpenStack:** generates flavor YAML (`pci_passthrough:alias` or `resources:VGPU`). Nothing is deployed. The
-  `InfrastructureInventory` adapter interface is ready for a future Nova/Placement/Cyborg integration.
+| Endpoint | Purpose |
+|---|---|
+| `POST /calculate` | LLM sizing (known or custom model) |
+| `GET /ai-flavors`, `GET /ai-flavors/{id}` | AI VM flavor tiers (with the catalog models in each tier) |
+| `POST /ai-flavors/size` | Size an AI flavor: tier status, recommended flavor, sizing, full calculation |
+| `POST /ai-flavors`, `PUT/DELETE /ai-flavors/{id}` | Admin: manage flavor tiers |
+| `GET /ml/meta`, `POST /ml/size` | Custom ML model sizing |
+| `POST/GET/DELETE /deployment-specs` | "Deploy": store a deployment spec and compile its OpenStack flavor |
+| `GET /models`, `/gpus`, `/vgpu-profiles`, `/inventory`, `/benchmarks` | Catalogs (admin writes need the token) |
+| `POST /compare/models`, `/compare/gpus`, `/compare/precisions` | Comparisons |
 
 ## Documentation
 
-- [docs/architecture.md](docs/architecture.md): components, data flow, API
-- [docs/formulas.md](docs/formulas.md): every formula with a worked example
-- [docs/model-catalog.md](docs/model-catalog.md): catalog fields, metadata status, verification tool
-- [docs/gpu-catalog.md](docs/gpu-catalog.md): GPU fields, costs, inventory
-- [docs/vgpu.md](docs/vgpu.md): vGPU profiles and suitability rules
-- [docs/openstack-integration.md](docs/openstack-integration.md): flavor output and the adapter
-- [docs/benchmark-methodology.md](docs/benchmark-methodology.md): how to record benchmarks
-- [docs/assumptions.md](docs/assumptions.md): what the estimates assume and where they can be wrong
+- [docs/architecture.md](docs/architecture.md): layers, data flow, API
+- [docs/ai-flavors.md](docs/ai-flavors.md): AI VM flavor tiers, naming, upgrade and downsize logic, deployment specs
+- [docs/custom-ml.md](docs/custom-ml.md): custom ML sizing (inference, training, LoRA/QLoRA, activations)
+- [docs/formulas.md](docs/formulas.md): every LLM formula with a worked example
+- [docs/model-catalog.md](docs/model-catalog.md), [docs/gpu-catalog.md](docs/gpu-catalog.md), [docs/vgpu.md](docs/vgpu.md)
+- [docs/openstack-integration.md](docs/openstack-integration.md): deployment spec, flavor compiler, inventory adapters
+- [docs/benchmark-methodology.md](docs/benchmark-methodology.md), [docs/assumptions.md](docs/assumptions.md)

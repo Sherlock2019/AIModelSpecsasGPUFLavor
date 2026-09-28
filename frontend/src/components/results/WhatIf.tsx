@@ -1,18 +1,18 @@
 import { ArrowRight, Lightbulb } from 'lucide-react'
 import { useState } from 'react'
 import { fmtMem, type Unit } from '../../lib/format'
-import type { CalcWarning, CalculationResult, Suggestion, WorkloadInput } from '../../types'
+import type { CalcWarning, Suggestion } from '../../types'
 import { Alert, Button } from '../ui'
 
 /** One-click variants of the workload that need less hardware. */
-export function WhatIfPanel({
+export function WhatIfPanel<P extends Record<string, unknown>>({
   suggestions,
   unit,
   onApply,
 }: {
   suggestions: Suggestion[]
   unit: Unit
-  onApply: (patch: Partial<WorkloadInput>) => void
+  onApply: (patch: P) => void
 }) {
   if (!suggestions.length) return null
   return (
@@ -33,7 +33,7 @@ export function WhatIfPanel({
             <p className="mt-1.5 flex-1 text-xs text-ink-3">{s.tradeoff}</p>
             <div className="mt-3 flex items-center justify-between gap-2">
               <span className="text-xs text-good-text">{s.saves_gb > 0 ? `Saves ${fmtMem(s.saves_gb, unit, 0)}` : ''}</span>
-              <Button size="sm" onClick={() => onApply(s.patch)}>
+              <Button size="sm" onClick={() => onApply(s.patch as P)}>
                 Apply
               </Button>
             </div>
@@ -45,11 +45,11 @@ export function WhatIfPanel({
 }
 
 /** Critical and warning items always visible; informational notes behind a toggle. */
-export function WarningsSummary({ result }: { result: CalculationResult }) {
+export function WarningsSummary({ warnings }: { warnings: CalcWarning[] }) {
   const [showNotes, setShowNotes] = useState(false)
-  const important = result.warnings.filter((w) => w.severity !== 'info')
-  const notes = result.warnings.filter((w) => w.severity === 'info')
-  if (!result.warnings.length) return null
+  const important = warnings.filter((w) => w.severity !== 'info')
+  const notes = warnings.filter((w) => w.severity === 'info')
+  if (!warnings.length) return null
   const order: Record<CalcWarning['severity'], number> = { critical: 0, warning: 1, info: 2 }
   return (
     <div className="space-y-2">

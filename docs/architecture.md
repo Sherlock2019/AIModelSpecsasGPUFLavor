@@ -22,6 +22,18 @@
                     benchmarks · saved_calculations · app_settings
 ```
 
+## Workload front ends sharing one matcher
+
+| Front end | Module | Produces |
+|---|---|---|
+| LLM (known or custom) | `engine/calculator.py` + `engine/memory.py` | weights + KV cache breakdown |
+| AI VM flavor | `app/ai_flavors.py` (no sizing of its own) | tier policy + tier status around `calculate()` |
+| Custom ML model | `engine/ml.py` | weights + gradients + optimizer + activations breakdown |
+
+All three call `engine/selection.generate()`, which takes a per-GPU memory function. They therefore share vGPU → single
+GPU → multi-GPU matching, NVIDIA/AMD handling, capacity rules, flavor naming (`engine/flavor.py`) and the deployment
+spec plus OpenStack compiler (`engine/openstack.py`, `app/openstack_compiler.py`).
+
 ## Data flow of `POST /api/v1/calculate`
 
 1. The request is validated by `CalculateRequest`. It takes exactly one of `model_id` or `custom_model`, and unknown fields are rejected.

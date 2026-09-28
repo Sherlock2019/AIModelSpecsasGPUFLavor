@@ -151,6 +151,10 @@ class VGPUProfile(BaseModel):
     supports_cuda: bool = True
     license_required: bool = True
     license_cost_per_hour: Optional[float] = Field(default=None, ge=0)
+    # Free instances right now (None = unknown). 0 means a suitable profile is exhausted and is skipped.
+    available_instances: Optional[int] = Field(default=None, ge=0)
+    # Placement trait that selects this profile (from your OpenStack config; never guessed).
+    openstack_trait: Optional[str] = None
     source_url: Optional[str] = "https://docs.nvidia.com/vgpu/latest/grid-vgpu-user-guide/index.html"
     metadata_status: MetadataStatus = "imported"
     notes: Optional[str] = None
@@ -165,6 +169,46 @@ class VGPUProfile(BaseModel):
     @property
     def usable_vram_bytes(self) -> float:
         return self.vram_gb * 1024**3
+
+
+class AIFlavorDefinition(BaseModel):
+    """Customer-facing AI VM tier (AI-8B, AI-70B, ...). Product catalog only - never hardware sizing.
+
+    The VRAM range is catalog guidance; the sizing engine is the source of truth.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(pattern=ID_PATTERN)
+    display_name: str = Field(min_length=1, max_length=40)
+    description: str = ""
+    group: Literal["small", "medium", "large", "ultra"] = "small"
+    parameter_floor_b: float = Field(ge=0)
+    parameter_ceiling_b: float = Field(gt=0)
+    baseline_precision: str = "int4"
+    default_vram_min_gb: float = Field(ge=0)
+    default_vram_max_gb: float = Field(ge=0)
+    recommended_use_cases: list[str] = Field(default_factory=list)
+    example_model_ids: list[str] = Field(default_factory=list)
+    allow_vgpu: bool = True
+    allow_full_gpu: bool = True
+    allow_multi_gpu: bool = False
+    performance_tier: str = "standard"
+    default_context_length: int = Field(default=32768, gt=0)
+    default_concurrency: int = Field(default=20, gt=0)
+    default_performance_priority: Priority = "balanced"
+    commercial_sku: Optional[str] = None
+    enabled: bool = True
+
+    @model_validator(mode="after")
+    def _check(self) -> "AIFlavorDefinition":
+        if self.parameter_floor_b >= self.parameter_ceiling_b:
+            raise ValueError("parameter_floor_b must be below parameter_ceiling_b")
+        if self.default_vram_min_gb > self.default_vram_max_gb:
+            raise ValueError("default_vram_min_gb cannot exceed default_vram_max_gb")
+        if not (self.allow_vgpu or self.allow_full_gpu or self.allow_multi_gpu):
+            raise ValueError("Allow at least one of vGPU, full GPU or multi-GPU")
+        return self
 
 
 class InventoryRecord(BaseModel):
@@ -226,6 +270,7 @@ class WorkloadInput(BaseModel):
     kv_cache_precision: str = "auto"
 
     allow_vgpu: bool = True
+    allow_single_gpu: bool = True  # one dedicated GPU; AI flavor tiers can switch it off (e.g. multi-GPU-only tiers)
     allow_multi_gpu: bool = True
     prefer_lowest_cost: bool = True
     add_safety_headroom: bool = True
@@ -343,6 +388,10 @@ class MemoryBreakdown(BaseModel):
     headroom_gb: float
     required_vram_gb: float
     safety_margin_percent: float
+    # Non-LLM / training components (0 for LLM inference).
+    activations_gb: float = 0
+    gradients_gb: float = 0
+    optimizer_gb: float = 0
 
 
 class ComputeProfile(BaseModel):
@@ -414,12 +463,16 @@ class Candidate(BaseModel):
     benchmark: Optional[BenchmarkMatch] = None
     notes: list[str] = Field(default_factory=list)
     rejected_reason: Optional[str] = None
+    capacity_limited: bool = False  # rejected only because capacity is short right now
     score: Optional[float] = None
     label: str
 
 
 class Recommendation(BaseModel):
-    ai_flavor: str
+    ai_flavor: str  # AI-70B-Q4-PRO
+    ai_flavor_short: str = ""  # AI-70B-PRO (precision shown only when it differs from the tier baseline)
+    flavor_variant: str = ""  # SHARED | PRO | MULTI
+    flavor_tier_id: Optional[str] = None  # ai-70b (None when above the largest tier)
     flavor_name: str
     gpu: str
     gpu_id: str
@@ -493,7 +546,213 @@ class CalculationResult(BaseModel):
     vgpu_verdict: str
     warnings: list[Warning_]
     explanation: list[str]
+    deployment_spec: Optional[dict[str, Any]] = None
     openstack: Optional[dict[str, Any]]
     openstack_yaml: Optional[str]
     trace: list[TraceStep]
     suggestions: list[Suggestion] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- custom ML models
+
+MLCategory = Literal[
+    "computer_vision",
+    "image_classification",
+    "object_detection",
+    "segmentation",
+    "ocr",
+    "speech_recognition",
+    "text_to_speech",
+    "embedding",
+    "diffusion",
+    "video",
+    "recommendation",
+    "tabular",
+    "time_series",
+    "transformer",
+    "generic",
+    "other",
+]
+MLTask = Literal["inference", "training", "fine_tuning"]
+
+
+class MLSizingRequest(BaseModel):
+    """A non-LLM (or custom) ML workload. Only the simple-mode fields are needed; the rest are
+    advanced settings with sensible defaults per model type."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_name: str = Field(default="Custom ML model", min_length=1, max_length=200)
+    model_category: MLCategory = "computer_vision"
+    task: MLTask = "inference"
+    fine_tune_method: Literal["full", "lora", "qlora"] = "full"
+    framework: str = "pytorch"
+    parameters_m: float = Field(gt=0, le=10_000_000, description="Parameter count in millions")
+    model_file_size_gb: Optional[float] = Field(default=None, gt=0)
+    precision: str = "fp16"
+    batch_size: int = Field(default=1, ge=1, le=100_000)
+    concurrent_requests: int = Field(default=1, ge=1, le=100_000)
+    performance_priority: Priority = "balanced"
+    target_latency_ms: Optional[float] = Field(default=None, gt=0)
+    target_throughput: Optional[float] = Field(default=None, gt=0, description="Samples per second")
+
+    # Model-type inputs (defaults depend on the category when omitted)
+    image_width: Optional[int] = Field(default=None, gt=0, le=32768)
+    image_height: Optional[int] = Field(default=None, gt=0, le=32768)
+    channels: int = Field(default=3, ge=1, le=64)
+    frames_per_sample: Optional[int] = Field(default=None, gt=0, le=10_000)
+    audio_seconds: Optional[float] = Field(default=None, gt=0, le=36_000)
+    sample_rate_hz: Optional[int] = Field(default=None, gt=0)
+    sequence_length: Optional[int] = Field(default=None, gt=0, le=10_000_000)
+    diffusion_steps: Optional[int] = Field(default=None, gt=0, le=1000)
+    num_detections: Optional[int] = Field(default=None, gt=0)
+    input_elements: Optional[int] = Field(default=None, gt=0, description="Input tensor elements per sample")
+    output_elements: Optional[int] = Field(default=None, gt=0, description="Output tensor elements per sample")
+
+    # Advanced
+    num_layers: Optional[int] = Field(default=None, gt=0)
+    hidden_size: Optional[int] = Field(default=None, gt=0)
+    uses_kv_cache: bool = False
+    activation_memory_gb: Optional[float] = Field(default=None, ge=0, description="Manual total activation memory")
+    gradient_checkpointing: bool = False
+    optimizer: str = "adamw"
+    optimizer_bytes_per_param: Optional[float] = Field(default=None, ge=0)
+    optimizer_precision: str = "fp32"
+    master_weights: bool = True
+    training_precision: Optional[str] = None
+    gradient_precision: Optional[str] = None
+    adapter_percent: Optional[float] = Field(default=None, gt=0, le=100)
+    data_parallel_size: int = Field(default=1, ge=1, le=1024)
+    tensor_parallel_size: Optional[int] = Field(default=None, ge=1, le=64)
+    pipeline_parallel_size: int = Field(default=1, ge=1, le=64)
+    model_growth_percent: float = Field(default=0, ge=0, le=1000)
+    safety_margin_percent: Optional[float] = Field(default=None, ge=0, le=100)
+
+    # Infrastructure policy
+    allow_vgpu: bool = True
+    allow_single_gpu: bool = True
+    allow_multi_gpu: bool = True
+    max_gpu_count: int = Field(default=8, ge=1, le=64)
+    allowed_gpu_ids: Optional[list[str]] = None
+    prefer_lowest_cost: bool = True
+
+
+class MLModelSummary(BaseModel):
+    name: str
+    category: MLCategory
+    category_label: str
+    task: MLTask
+    fine_tune_method: Optional[str]
+    parameters_b: float
+    trainable_parameters_b: float
+    precision: str
+    compute_precision: str
+    framework: str
+
+
+class MLWorkloadSummary(BaseModel):
+    batch_size: int
+    micro_batch_per_gpu: int
+    concurrent_requests: int
+    in_flight_samples: int
+    input_description: str
+    effective_tokens_per_sample: float
+    performance_priority: Priority
+    data_parallel_size: int
+    samples_per_second: float
+    safety_margin_percent: float
+
+
+class MLComputeProfile(BaseModel):
+    classification: str
+    bandwidth_class: str
+    memory_intensity: str
+    required_tflops: float
+    required_bandwidth_gbps: float
+    gflops_per_sample: float
+    samples_per_second: float
+
+
+class MLRequirement(BaseModel):
+    gpu_count_label: str
+    total_gpus: int
+    mode: str
+    interconnect: Literal["Not required", "Recommended", "Required"]
+
+
+class MLSizingResult(BaseModel):
+    workload_type: Literal["custom_ml"] = "custom_ml"
+    calculation_mode: Literal["estimate", "benchmark"] = "estimate"
+    confidence_label: Literal["ESTIMATED", "BENCHMARK-BASED"] = "ESTIMATED"
+    activation_method: Literal["estimated", "manual"]
+    model: MLModelSummary
+    workload: MLWorkloadSummary
+    memory: MemoryBreakdown
+    memory_gib: MemoryBreakdown
+    compute: MLComputeProfile
+    requirement: MLRequirement
+    recommendation: Optional[Recommendation]
+    ai_flavor_display: Optional[str]
+    matches: list[Candidate]
+    rejected: list[Candidate]
+    vgpu_verdict: str
+    warnings: list[Warning_]
+    explanation: list[str]
+    suggestions: list[Suggestion] = Field(default_factory=list)
+    deployment_spec: Optional[dict[str, Any]]
+    openstack: Optional[dict[str, Any]]
+    openstack_yaml: Optional[str]
+    trace: list[TraceStep]
+
+
+# --------------------------------------------------------------------------- AI flavor sizing
+
+
+class FlavorSizeRequest(WorkloadInput):
+    """Size an AI VM flavor. `flavor_id` is optional (Mode B: start from a model)."""
+
+    flavor_id: Optional[str] = None
+    model_id: Optional[str] = None
+    custom_model: Optional[ModelSpec] = None
+
+    @model_validator(mode="after")
+    def _one_model(self) -> "FlavorSizeRequest":
+        if bool(self.model_id) == bool(self.custom_model):
+            raise ValueError("Provide exactly one of model_id or custom_model")
+        return self
+
+
+class FlavorRef(BaseModel):
+    id: str
+    display_name: str
+
+
+class FlavorSizeResult(BaseModel):
+    requested_flavor: Optional[FlavorRef]
+    model_flavor: Optional[FlavorRef]  # tier the model belongs to by parameter count
+    recommended_tier: Optional[FlavorRef]
+    tier_status: Literal["fits", "exceeds", "oversized", "no_tier", "model_tier"]
+    tier_message: Optional[str]
+    recommended_flavor: Optional[str]  # AI-70B-Q4-PRO
+    display_flavor: Optional[str]  # AI-70B-PRO
+    variant: Optional[str]
+    mode_label: Optional[str]
+    allocated_gpu_memory_gb: Optional[float]
+    vram_range_note: Optional[str]
+    sizing: dict[str, Any]  # SizingResult fields in product terms
+    calculation: CalculationResult
+
+
+class DeploymentSpecCreate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=200)
+    spec: dict[str, Any]
+
+
+class DeploymentSpecRecord(BaseModel):
+    id: int
+    name: Optional[str]
+    created_at: str
+    workload_type: str
+    ai_flavor: str
+    spec: dict[str, Any]
+    openstack: dict[str, Any]

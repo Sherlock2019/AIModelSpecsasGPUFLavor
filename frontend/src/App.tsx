@@ -5,7 +5,10 @@ import {
   Cpu,
   FolderClock,
   GitCompareArrows,
+  Layers3,
+  LayoutGrid,
   Menu,
+  ScanEye,
   Monitor,
   Moon,
   Settings,
@@ -20,22 +23,29 @@ import { applyTheme, loadTheme, type ThemeChoice } from './lib/theme'
 import { BenchmarksPage } from './pages/BenchmarksPage'
 import { CalculatorPage } from './pages/CalculatorPage'
 import { ComparePage } from './pages/ComparePage'
+import { FlavorAdminPage } from './pages/FlavorAdminPage'
+import { FlavorPage } from './pages/FlavorPage'
 import { GpuCatalogPage } from './pages/GpuCatalogPage'
 import { GuidePage } from './pages/GuidePage'
+import { HomePage } from './pages/HomePage'
+import { MLPage } from './pages/MLPage'
 import { ModelsPage } from './pages/ModelsPage'
 import { SavedPage } from './pages/SavedPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { CalcProvider } from './state'
 
 const NAV: { to: string; label: string; icon: LucideIcon; group?: string }[] = [
-  { to: '/', label: 'Calculator', icon: Calculator },
+  { to: '/', label: 'AI VM Catalog', icon: LayoutGrid },
+  { to: '/calculator', label: 'LLM Calculator', icon: Calculator },
+  { to: '/ml', label: 'Custom ML Model', icon: ScanEye },
   { to: '/compare', label: 'Compare', icon: GitCompareArrows },
-  { to: '/saved', label: 'Saved Calculations', icon: FolderClock },
+  { to: '/saved', label: 'Saved & Specs', icon: FolderClock },
   { to: '/guide', label: 'How it works', icon: BookOpen },
-  { to: '/models', label: 'Models', icon: Boxes, group: 'Catalog' },
-  { to: '/gpus', label: 'GPU Catalog', icon: Cpu, group: 'Catalog' },
-  { to: '/benchmarks', label: 'Benchmarks', icon: Timer, group: 'Catalog' },
-  { to: '/settings', label: 'Settings', icon: Settings, group: 'Catalog' },
+  { to: '/models', label: 'Models', icon: Boxes, group: 'Admin' },
+  { to: '/admin/flavors', label: 'AI Flavors', icon: Layers3, group: 'Admin' },
+  { to: '/gpus', label: 'GPU Inventory', icon: Cpu, group: 'Admin' },
+  { to: '/benchmarks', label: 'Benchmarks', icon: Timer, group: 'Admin' },
+  { to: '/settings', label: 'Settings', icon: Settings, group: 'Admin' },
 ]
 
 function Logo() {
@@ -139,7 +149,11 @@ export default function App() {
         </aside>
         <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">
           <Routes>
-            <Route path="/" element={<CalculatorPage />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/calculator" element={<CalculatorPage />} />
+            <Route path="/flavors/:id" element={<FlavorPage />} />
+            <Route path="/ml" element={<MLPage />} />
+            <Route path="/admin/flavors" element={<FlavorAdminPage />} />
             <Route path="/guide" element={<GuidePage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route path="/gpus" element={<GpuCatalogPage />} />

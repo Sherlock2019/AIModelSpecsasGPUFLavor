@@ -1,7 +1,14 @@
 import type {
+  AIFlavor,
   BenchmarkRecord,
   CalculateRequest,
   CalculationResult,
+  DeploymentSpec,
+  DeploymentSpecRecord,
+  FlavorSizeResult,
+  MLMeta,
+  MLSizingRequest,
+  MLSizingResult,
   GPUSpec,
   GpuCompareRow,
   InventoryRecord,
@@ -119,6 +126,19 @@ export const api = {
   calculation: (id: number) =>
     request<{ id: number; name: string; request: CalculateRequest; result: CalculationResult }>(`/calculations/${id}`),
   deleteCalculation: (id: number) => request<void>(`/calculations/${id}`, { method: 'DELETE' }),
+
+  aiFlavors: (includeDisabled = false) => request<AIFlavor[]>(`/ai-flavors?include_disabled=${includeDisabled}`),
+  aiFlavor: (id: string) => request<AIFlavor>(`/ai-flavors/${encodeURIComponent(id)}`),
+  createAIFlavor: (f: AIFlavor) => post<AIFlavor>('/ai-flavors', f),
+  updateAIFlavor: (f: AIFlavor) => put<AIFlavor>(`/ai-flavors/${encodeURIComponent(f.id)}`, f),
+  sizeFlavor: (req: CalculateRequest & { flavor_id?: string | null }) => post<FlavorSizeResult>('/ai-flavors/size', req),
+
+  mlMeta: () => request<MLMeta>('/ml/meta'),
+  sizeML: (req: MLSizingRequest) => post<MLSizingResult>('/ml/size', req),
+
+  deploymentSpecs: () => request<DeploymentSpecRecord[]>('/deployment-specs'),
+  createDeploymentSpec: (spec: DeploymentSpec, name?: string) => post<DeploymentSpecRecord>('/deployment-specs', { spec, name }),
+  deleteDeploymentSpec: (id: number) => request<void>(`/deployment-specs/${id}`, { method: 'DELETE' }),
 
   settings: () => request<Record<string, unknown>>('/settings'),
   putSettings: (s: Record<string, unknown>) => put<Record<string, unknown>>('/settings', s),

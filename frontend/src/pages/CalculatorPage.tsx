@@ -1,5 +1,6 @@
-import { Check, ChevronDown, Link2 } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Link2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { ModelCombobox } from '../components/calculator/ModelCombobox'
 import { ModelDetails } from '../components/calculator/ModelDetails'
@@ -10,10 +11,10 @@ import {
   PrecisionSelect,
   PrioritySelect,
 } from '../components/calculator/WorkloadPanel'
-import { FlowGraphic, WhyPanel } from '../components/results/Explain'
+import { FlowGraphic, LlmWhyPanel, llmFlow } from '../components/results/Explain'
 import { MatchList } from '../components/results/MatchList'
 import { MemoryChart } from '../components/results/MemoryChart'
-import { RequirementPanel } from '../components/results/Requirement'
+import { RequirementPanel, llmRequirement } from '../components/results/Requirement'
 import { ExportBar, InfrastructureTab, PrecisionCompareTab, TraceTab } from '../components/results/ResultExtras'
 import { WarningsSummary, WhatIfPanel } from '../components/results/WhatIf'
 import { Alert, Button, Input, Segmented, Tabs, cx } from '../components/ui'
@@ -39,6 +40,10 @@ export function CalculatorPage() {
 
   // Apply a shared link (?m=…&p=…) once on arrival.
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('custom') === '1') {
+      setForm((f) => ({ ...f, modelId: CUSTOM_MODEL_ID, override: null }))
+      return
+    }
     const shared = fromQuery(window.location.search)
     if (shared) setForm((f) => ({ ...f, modelId: shared.modelId, override: null, workload: { ...f.workload, ...shared.patch } }))
   }, [setForm])
@@ -128,10 +133,16 @@ export function CalculatorPage() {
           {!result && !error && <ResultSkeleton />}
           {result && (
             <>
-              <RequirementPanel result={result} unit={unit} updating={updating} />
-              <WarningsSummary result={result} />
+              <RequirementPanel view={llmRequirement(result, unit)} unit={unit} updating={updating} />
+              <FlavorLink result={result} modelId={form.modelId === CUSTOM_MODEL_ID || form.override ? null : form.modelId} />
+              <WarningsSummary warnings={result.warnings} />
               <div className={cx('transition-opacity', updating && 'opacity-60')}>
-                <MatchList result={result} unit={unit} />
+                <MatchList
+                  matches={result.matches}
+                  priority={result.workload.performance_priority}
+                  flavor={result.recommendation?.ai_flavor}
+                  unit={unit}
+                />
               </div>
             </>
           )}
@@ -141,9 +152,9 @@ export function CalculatorPage() {
       {/* ------------------------------------------------------------ explanation (full width) */}
       {result && (
         <div className="mt-6 space-y-5">
-          <FlowGraphic result={result} unit={unit} />
-          <WhyPanel result={result} unit={unit} />
-          <WhatIfPanel suggestions={result.suggestions} unit={unit} onApply={applySuggestion} />
+          <FlowGraphic steps={llmFlow(result, unit, result.recommendation?.ai_flavor)} />
+          <LlmWhyPanel result={result} unit={unit} />
+          <WhatIfPanel<Partial<WorkloadInput>> suggestions={result.suggestions} unit={unit} onApply={applySuggestion} />
           <TechnicalSection result={result} request={shownRequest} unit={unit} onUnit={setUnit} />
           <Toolbar result={result} request={shownRequest} canLink={form.modelId !== CUSTOM_MODEL_ID && !form.override} />
         </div>
@@ -291,6 +302,26 @@ function Toolbar({ result, request, canLink }: { result: CalculationResult; requ
         {saveMsg && <span className="text-xs text-ink-3">{saveMsg}</span>}
       </div>
     </div>
+  )
+}
+
+/** Mode B: a model choice maps to an AI VM flavor tier; offer to continue there. */
+function FlavorLink({ result, modelId }: { result: CalculationResult; modelId: string | null }) {
+  const rec = result.recommendation
+  if (!rec?.flavor_tier_id) return null
+  const w = result.workload
+  const q = new URLSearchParams({ ctx: String(w.context_length), n: String(w.concurrent_sequences), p: w.precision, pr: w.performance_priority })
+  if (modelId) q.set('m', modelId)
+  return (
+    <Link
+      to={`/flavors/${rec.flavor_tier_id}?${q}`}
+      className="flex items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand-soft px-4 py-2.5 text-sm text-brand-text hover:border-brand"
+    >
+      <span>
+        This is an <strong>{rec.ai_flavor_short}</strong> workload. Open it as an AI VM flavor to create a deployment spec.
+      </span>
+      <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+    </Link>
   )
 }
 
